@@ -137,7 +137,15 @@ const CoachScreen = () => {
 
                     {/* Boutons d'action modernes (côte à côte) */}
                     <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.actionBtnPrimary}>
+                        
+                        {/* 🔥 C'EST ICI QU'ON A RAJOUTÉ LA REDIRECTION VERS LE CHAT 🔥 */}
+                        <TouchableOpacity 
+                            style={styles.actionBtnPrimary}
+                            onPress={() => router.push({
+                                pathname: "/chat/[id]", 
+                                params: { id: myCoach.id, name: myCoach.firstname }
+                            })}
+                        >
                             <Ionicons name="chatbubble-ellipses" size={20} color="white" style={{marginRight: 8}} />
                             <Text style={styles.actionBtnText}>Chat</Text>
                         </TouchableOpacity>
@@ -230,7 +238,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B' },
   sectionTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 15, paddingHorizontal: 16, textTransform: 'uppercase', letterSpacing: 1 },
   
-  // NOUVEAUX STYLES COACH ACTIF
   activeCoachCard: { backgroundColor: '#232D3F', borderRadius: 16, padding: 16, marginHorizontal: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#2A4562' },
   coachImagePlaceholder: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: 'white', fontWeight: 'bold', fontSize: 22 },
@@ -245,7 +252,6 @@ const styles = StyleSheet.create({
   unassignButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 15, marginHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(231, 76, 60, 0.1)' },
   unassignText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 16 },
 
-  // NO COACH STYLES
   noCoachContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 20 },
   noCoachTitle: { color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', paddingHorizontal: 20 },
   noCoachText: { color: '#aaa', fontSize: 16, textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 },
@@ -257,7 +263,6 @@ const styles = StyleSheet.create({
   infoBox: { flexDirection: 'row', backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 20, width: '90%' },
   infoText: { color: '#888', marginLeft: 10, flex: 1, fontSize: 14, lineHeight: 20 },
   
-  // INVITATIONS
   invitationsSection: { width: '100%', marginBottom: 30, paddingLeft: 16 },
   invitationsHeader: { color: '#8A8D91', fontSize: 14, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
   invitationCardHorizontal: { backgroundColor: '#232D3F', borderRadius: 16, padding: 15, borderLeftWidth: 4, borderLeftColor: '#f1c40f', flexDirection: 'row', alignItems: 'center', width: 280, marginRight: 15, elevation: 3 },

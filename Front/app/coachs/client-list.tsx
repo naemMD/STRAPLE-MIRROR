@@ -128,14 +128,12 @@ const CoachListScreen = () => {
                 });
                 fetchSentInvitations();
                 
-                // ✨ AJOUT DU TOAST DE SUCCÈS ICI
                 Toast.show({
                     type: 'success',
                     text1: 'Deleted',
                     text2: 'The invitation has been successfully removed.'
                 });
             } catch (e) {
-                // ✨ REMPLACEMENT DE L'ALERT PAR UN TOAST D'ERREUR
                 Toast.show({
                     type: 'error',
                     text1: 'Oops!',
@@ -153,8 +151,12 @@ const CoachListScreen = () => {
       });
   };
 
-  const handleContactClient = () => {
-      Alert.alert("Coming Soon", "Messaging feature is currently in development.");
+  // 🔥 NOUVELLE FONCTION POUR OUVRIR LE CHAT 🔥
+  const handleContactClient = (client: any) => {
+      navigation.push({
+          pathname: "/chat/[id]",
+          params: { id: client.id, name: client.firstname }
+      });
   };
 
   // --- RENDU ITEMS ---
@@ -174,7 +176,8 @@ const CoachListScreen = () => {
       </View>
       
       <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity style={styles.actionButton} onPress={handleContactClient}>
+        {/* 🔥 ON PASSE LE CLIENT (item) À LA FONCTION ICI 🔥 */}
+        <TouchableOpacity style={styles.actionButton} onPress={() => handleContactClient(item)}>
           <Text style={styles.actionButtonText}>Contact</Text>
         </TouchableOpacity>
         
@@ -298,7 +301,6 @@ const styles = StyleSheet.create({
   sectionLabel: { color: '#8A8D91', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 },
   invitationItem: { backgroundColor: '#1E2C3D', borderRadius: 12, padding: 12, marginTop: 10, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 4 },
   
-  // NOMS DE CLASSES CORRIGÉS (client au lieu de coach)
   clientList: { paddingHorizontal: 16, paddingBottom: 20 },
   clientItem: { backgroundColor: '#2A4562', borderRadius: 10, marginBottom: 16, padding: 12 },
   clientInfoContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },

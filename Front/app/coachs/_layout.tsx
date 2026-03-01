@@ -55,9 +55,10 @@ export default function CoachLayout() {
           <Stack screenOptions={{ headerShown: false }} />
         </View>
 
-        {/* FOOTER: Now with 4 Items including Settings */}
+        {/* FOOTER: Now with 5 Items including Messages and Settings */}
         {!isSpecialPage && (
           <View style={styles.footer}>
+            {/* HOME */}
             <TouchableOpacity onPress={() => router.push("/coachs/home")}>
               <Ionicons 
                 name="home" 
@@ -66,6 +67,7 @@ export default function CoachLayout() {
               />
             </TouchableOpacity>
 
+            {/* CLIENTS LIST */}
             <TouchableOpacity onPress={() => router.push("/coachs/client-list")}>
               <Ionicons 
                 name="people" 
@@ -74,15 +76,25 @@ export default function CoachLayout() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push("/coachs/forum")}>
+            {/* MESSAGES */}
+            <TouchableOpacity onPress={() => router.push("/coachs/message-list")}>
               <Ionicons 
                 name="chatbubbles" 
+                size={26} 
+                color={pathname === "/coachs/messages-list" ? "#3498DB" : "white"} 
+              />
+            </TouchableOpacity>
+
+            {/* FORUM (Icône mise à jour pour être plus explicite) */}
+            <TouchableOpacity onPress={() => router.push("/coachs/forum")}>
+              <Ionicons 
+                name="newspaper" // <-- Plus explicite pour un flux de forum / feed
                 size={26} 
                 color={pathname === "/coachs/forum" ? "#3498DB" : "white"} 
               />
             </TouchableOpacity>
 
-            {/* SETTINGS GEAR AT THE BOTTOM */}
+            {/* SETTINGS */}
             <TouchableOpacity onPress={() => router.push("/coachs/settings")}>
               <Ionicons 
                 name="settings" 
@@ -124,10 +136,11 @@ const styles = StyleSheet.create({
     height: 75,
     backgroundColor: "#161B22",
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between", // Changé de space-around à space-between pour 5 items
     alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: "#222",
-    paddingBottom: 10, // Extra space for thumb navigation
+    paddingHorizontal: 20, // Ajout d'un padding horizontal pour équilibrer
+    paddingBottom: 10,
   },
 });

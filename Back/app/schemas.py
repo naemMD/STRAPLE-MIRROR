@@ -7,6 +7,39 @@ from typing import List, Optional, Dict
 from datetime import datetime
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    receiver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    is_read = Column(Boolean, default=False)
+
+class MessageBase(BaseModel):
+    content: str
+
+class MessageCreate(MessageBase):
+    receiver_id: int
+
+class MessageRead(MessageBase):
+    id: int
+    sender_id: int
+    receiver_id: int
+    timestamp: datetime
+    is_read: bool
+
+    class Config:
+        from_attributes = True
+
+class ConversationRead(BaseModel):
+    client_id: int
+    client_firstname: str
+    client_lastname: str
+    last_message: str | None
+    last_message_time: datetime | None
+
 class CoachInvitation(Base):
     __tablename__ = 'coach_invitations'
 
@@ -293,6 +326,10 @@ class MacroUpdate(BaseModel):
     goal_fats: Optional[float] = None
 
 __all__ = [
+    "Message",
+    "MessageCreate",
+    "MessageRead",
+    "ConversationRead",
     "CoachInvitation",
     "InvitationCreate",
     "InvitationUpdate",

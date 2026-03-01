@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, func, and_
+from sqlalchemy import select, update, delete, func, and_, or_, desc
 from app.model import *
 from app.database import get_session
 from app.api import *
@@ -895,3 +895,130 @@ async def get_coach_public_profile(
             "CrossFit Level 2 Instructor"
         ]
     }
+
+@router.get("/messages/conversations", response_model=list[ConversationRead])
+async def get_conversations(
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    clients_req = await session.execute(
+        select(Users).where(Users.coach_id == current_user_id)
+    )
+    clients = clients_req.scalars().all()
+
+    conversations = []
+    
+    for client in clients:
+        last_msg_req = await session.execute(
+            select(Message)
+            .where(
+                or_(
+                    and_(Message.sender_id == current_user_id, Message.receiver_id == client.id),
+                    and_(Message.sender_id == client.id, Message.receiver_id == current_user_id)
+                )
+            )
+            .order_by(desc(Message.timestamp))
+            .limit(1)
+        )
+        last_msg = last_msg_req.scalars().first()
+        
+        conversations.append({
+            "client_id": client.id,
+            "client_firstname": client.firstname,
+            "client_lastname": client.lastname,
+            "last_message": last_msg.content if last_msg else "Aucun message",
+            "last_message_time": last_msg.timestamp if last_msg else None
+        })
+        
+    conversations.sort(key=lambda x: x["last_message_time"] or datetime.min, reverse=True)
+    return conversations
+
+
+@router.get("/messages/{other_user_id}", response_model=list[MessageRead])
+async def get_chat_history(
+    other_user_id: int,
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    req = await session.execute(
+        select(Message)
+        .where(
+            or_(
+                and_(Message.sender_id == current_user_id, Message.receiver_id == other_user_id),
+                and_(Message.sender_id == other_user_id, Message.receiver_id == current_user_id)
+            )
+        )
+        .order_by(Message.timestamp.asc())
+    )
+    return req.scalars().all()
+
+
+@router.post("/messages", response_model=MessageRead)
+async def send_message(
+    message_data: MessageCreate,
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    new_msg = Message(
+        sender_id=current_user_id,
+        receiver_id=message_data.receiver_id,
+        content=message_data.content
+    )
+    session.add(new_msg)
+    await session.commit()
+    await session.refresh(new_msg)
+    return new_msg
+
+@router.get("/coaches/me/needs-attention")
+async def get_needs_attention(
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    pending_invites_req = await session.execute(
+        select(func.count(CoachInvitation.id))
+        .where(
+            and_(
+                CoachInvitation.coach_id == current_user_id,
+                CoachInvitation.status == 'pending'
+            )
+        )
+    )
+    pending_invites_count = pending_invites_req.scalar() or 0
+
+    unread_messages_req = await session.execute(
+        select(func.count(Message.id))
+        .where(
+            and_(
+                Message.receiver_id == current_user_id,
+                Message.is_read == False
+            )
+        )
+    )
+    unread_messages_count = unread_messages_req.scalar() or 0
+
+    return {
+        "pending_invitations": pending_invites_count,
+        "unread_messages": unread_messages_count,
+        "total_alerts": pending_invites_count + unread_messages_count
+    }
+
+@router.put("/messages/read/{other_user_id}")
+async def mark_messages_as_read(
+    other_user_id: int,
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = (
+        update(Message)
+        .where(
+            and_(
+                Message.sender_id == other_user_id,
+                Message.receiver_id == current_user_id,
+                Message.is_read == False
+            )
+        )
+        .values(is_read=True)
+    )
+    await session.execute(stmt)
+    await session.commit()
+    return {"message": "Messages marqués comme lus"}

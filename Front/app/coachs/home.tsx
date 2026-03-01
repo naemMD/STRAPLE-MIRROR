@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { getUserDetails } from '@/services/authStorage';
+// 🔥 N'oublie pas d'importer getToken
+import { getUserDetails, getToken } from '@/services/authStorage'; 
 
 export default function CoachHomepage() {
   const insets = useSafeAreaInsets();
@@ -14,20 +15,32 @@ export default function CoachHomepage() {
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
 
   const [summary, setSummary] = useState<any>(null);
+  const [attentionData, setAttentionData] = useState<any>(null); // 🔥 Nouvel état pour les alertes
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [coachName, setCoachName] = useState('');
 
-  const fetchSummary = async () => {
+  const fetchData = async () => {
     try {
       const user = await getUserDetails();
-      if (user?.id) {
+      const token = await getToken();
+      
+      if (user?.id && token) {
         setCoachName(user.firstname);
-        const response = await axios.get(`${API_URL}/coaches/${user.id}/home-summary`);
-        setSummary(response.data);
+        
+        // 🔥 On charge le résumé ET les alertes en même temps (Promise.all est super rapide)
+        const [summaryResponse, attentionResponse] = await Promise.all([
+            axios.get(`${API_URL}/coaches/${user.id}/home-summary`),
+            axios.get(`${API_URL}/coaches/me/needs-attention?current_user_id=${user.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+        ]);
+
+        setSummary(summaryResponse.data);
+        setAttentionData(attentionResponse.data);
       }
     } catch (error) {
-      console.error("Error fetching summary:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -35,17 +48,13 @@ export default function CoachHomepage() {
   };
 
   useEffect(() => {
-    fetchSummary();
+    fetchData();
   }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchSummary();
+    fetchData();
   }, []);
-
-  const handleMessage = (clientName: string) => {
-      Alert.alert("Message", `Start a conversation with ${clientName}? (Feature coming soon)`);
-  };
 
   if (loading) {
     return (
@@ -89,37 +98,58 @@ export default function CoachHomepage() {
             </View>
         </View>
 
-        {/* --- ALERTS SECTION --- */}
+        {/* --- ALERTS SECTION (DYNAMIQUE) --- */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>⚠️ Needs Attention</Text>
           
-          {summary?.alerts && summary.alerts.length > 0 ? (
-              summary.alerts.map((alert: any) => (
-                <View key={alert.id} style={styles.alertCard}>
-                    <View style={styles.cardHeader}>
-                        <View style={styles.avatarPlaceholder}>
-                            <Text style={styles.avatarText}>{alert.name[0]}</Text>
-                        </View>
-                        <View style={{flex: 1, marginLeft: 10}}>
-                            <Text style={styles.clientName}>{alert.name}</Text>
-                            <Text style={styles.alertIssue}>{alert.issue}</Text>
-                            <Text style={styles.alertDetails}>
-                                {alert.value} / {alert.goal} kcal
-                            </Text>
-                        </View>
-                        <TouchableOpacity 
-                            style={styles.actionIcon} 
-                            onPress={() => handleMessage(alert.name)}
-                        >
-                            <Ionicons name="chatbubble-ellipses-outline" size={24} color="#3498DB" />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-              ))
+          {attentionData && attentionData.total_alerts > 0 ? (
+              <>
+                  {/* Carte : Invitations en attente */}
+                  {attentionData.pending_invitations > 0 && (
+                      <TouchableOpacity 
+                          style={[styles.alertCard, { borderLeftColor: '#f39c12' }]}
+                          onPress={() => navigation.push('/coachs/client-list')}
+                      >
+                          <View style={styles.cardHeader}>
+                              <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(243, 156, 18, 0.2)' }]}>
+                                  <Ionicons name="people-outline" size={24} color="#f39c12" />
+                              </View>
+                              <View style={{flex: 1, marginLeft: 15}}>
+                                  <Text style={styles.clientName}>Pending Invitations</Text>
+                                  <Text style={[styles.alertIssue, { color: '#f39c12' }]}>
+                                      {attentionData.pending_invitations} client(s) waiting for approval
+                                  </Text>
+                              </View>
+                              <Ionicons name="chevron-forward" size={20} color="#8A8D91" />
+                          </View>
+                      </TouchableOpacity>
+                  )}
+
+                  {/* Carte : Messages non lus */}
+                  {attentionData.unread_messages > 0 && (
+                      <TouchableOpacity 
+                          style={[styles.alertCard, { borderLeftColor: '#e74c3c' }]}
+                          onPress={() => navigation.push('/coachs/message-list')}
+                      >
+                          <View style={styles.cardHeader}>
+                              <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(231, 76, 60, 0.2)' }]}>
+                                  <Ionicons name="chatbubbles-outline" size={24} color="#e74c3c" />
+                              </View>
+                              <View style={{flex: 1, marginLeft: 15}}>
+                                  <Text style={styles.clientName}>Unread Messages</Text>
+                                  <Text style={styles.alertIssue}>
+                                      {attentionData.unread_messages} new message(s) received
+                                  </Text>
+                              </View>
+                              <Ionicons name="chevron-forward" size={20} color="#8A8D91" />
+                          </View>
+                      </TouchableOpacity>
+                  )}
+              </>
           ) : (
               <View style={styles.emptyState}>
                   <Ionicons name="checkmark-circle" size={40} color="#2ecc71" />
-                  <Text style={styles.emptyText}>No alerts today. Good job!</Text>
+                  <Text style={styles.emptyText}>You're all caught up! Great job.</Text>
               </View>
           )}
         </View>
@@ -222,12 +252,11 @@ const styles = StyleSheet.create({
   },
   // Alerts
   alertCard: {
-    backgroundColor: '#3b2a2a', // Teinte rougeâtre sombre
+    backgroundColor: '#3b2a2a', // Teinte qui est écrasée par le style inline pour matcher l'alerte
     borderRadius: 12,
     padding: 15,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#e74c3c'
   },
   cardHeader: {
     flexDirection: 'row',
@@ -252,17 +281,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   alertIssue: {
-    color: '#e74c3c', // Rouge vif
+    color: '#e74c3c', // Rouge par défaut
     fontWeight: 'bold',
-    fontSize: 14,
-    marginTop: 2
-  },
-  alertDetails: {
-      color: '#ccc',
-      fontSize: 12
-  },
-  actionIcon: {
-      padding: 5
+    fontSize: 12,
+    marginTop: 4
   },
   // Empty State
   emptyState: {
@@ -285,7 +307,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#f1c40f' // Or
+    borderLeftColor: '#f1c40f' 
   },
   badgeContainer: {
       backgroundColor: 'rgba(46, 204, 113, 0.2)',
