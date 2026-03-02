@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { getUserDetails, getToken } from '@/services/authStorage';
@@ -127,8 +127,10 @@ const CoachScreen = () => {
   };
 
   return (
-    // 🔥 C'est ici qu'était le problème ! On a supprimé le paddingTop: insets.top
     <View style={styles.container}>
+      {/* Supprime le header du layout sans affecter le paddingTop manuel */}
+      <Stack.Screen options={{ headerShown: false }} />
+
       {loading ? (
         <ActivityIndicator size="large" color="#3498DB" style={{marginTop: 50}} />
       ) : (
@@ -217,24 +219,26 @@ const CoachScreen = () => {
                     {(invitations.length > 0 || sentRequests.length > 0) && <View style={styles.separator} />}
 
                     {/* --- FIND COACH / CODE UNIQUE --- */}
-                    <Ionicons name="people-circle-outline" size={80} color="#3498DB" style={{marginBottom: 20}} />
-                    <Text style={styles.noCoachTitle}>You don't have a coach yet</Text>
-                    <Text style={styles.noCoachText}>Find a coach near you, or share your unique code with your current coach.</Text>
+                    <View style={{alignItems: 'center', marginTop: 40}}>
+                        <Ionicons name="people-circle-outline" size={80} color="#3498DB" style={{marginBottom: 20}} />
+                        <Text style={styles.noCoachTitle}>You don't have a coach yet</Text>
+                        <Text style={styles.noCoachText}>Find a coach near you, or share your unique code with your current coach.</Text>
 
-                    <TouchableOpacity style={styles.searchButton} onPress={() => router.push('/clients/search-coach')}>
-                        <Ionicons name="search" size={24} color="white" style={{marginRight: 10}}/>
-                        <Text style={styles.searchButtonText}>Find a Coach</Text>
-                    </TouchableOpacity>
+                        <TouchableOpacity style={styles.searchButton} onPress={() => router.push('/clients/search-coach')}>
+                            <Ionicons name="search" size={24} color="white" style={{marginRight: 10}}/>
+                            <Text style={styles.searchButtonText}>Find a Coach</Text>
+                        </TouchableOpacity>
 
-                    <View style={styles.codeCard}>
-                        <Text style={styles.codeLabel}>YOUR UNIQUE CODE</Text>
-                        <Text style={styles.codeValue}>{user?.unique_code || "Loading..."}</Text>
+                        <View style={styles.codeCard}>
+                            <Text style={styles.codeLabel}>YOUR UNIQUE CODE</Text>
+                            <Text style={styles.codeValue}>{user?.unique_code || "Loading..."}</Text>
+                        </View>
+
+                        <TouchableOpacity style={styles.copyButton} onPress={handleCopyCode}>
+                            <Ionicons name="copy-outline" size={20} color="white" style={{marginRight: 10}}/>
+                            <Text style={styles.copyButtonText}>Copy to clipboard</Text>
+                        </TouchableOpacity>
                     </View>
-
-                    <TouchableOpacity style={styles.copyButton} onPress={handleCopyCode}>
-                        <Ionicons name="copy-outline" size={20} color="white" style={{marginRight: 10}}/>
-                        <Text style={styles.copyButtonText}>Copy to clipboard</Text>
-                    </TouchableOpacity>
                 </View>
             )}
           </ScrollView>
@@ -259,20 +263,20 @@ const styles = StyleSheet.create({
   unassignButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 15, marginHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(231, 76, 60, 0.1)' },
   unassignText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 16 },
 
-  noCoachContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  noCoachContainer: { width: '100%' },
   noCoachTitle: { color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', paddingHorizontal: 20 },
   noCoachText: { color: '#aaa', fontSize: 16, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 },
   
   searchButton: { flexDirection: 'row', backgroundColor: '#3498DB', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 25, alignItems: 'center', marginBottom: 30, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
   searchButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
 
-  codeCard: { backgroundColor: '#2A4562', width: '90%', padding: 20, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#3498DB', marginBottom: 20 },
+  codeCard: { backgroundColor: '#2A4562', width: '90%', padding: 20, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#3498DB', marginBottom: 20, alignSelf: 'center' },
   codeLabel: { color: '#aaa', fontSize: 12, letterSpacing: 1, marginBottom: 5 },
   codeValue: { color: '#fff', fontSize: 32, fontWeight: 'bold', letterSpacing: 2 },
-  copyButton: { flexDirection: 'row', backgroundColor: '#1E2C3D', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, alignItems: 'center', marginBottom: 30, borderWidth: 1, borderColor: '#3498DB' },
+  copyButton: { flexDirection: 'row', backgroundColor: '#1E2C3D', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, alignItems: 'center', marginBottom: 30, borderWidth: 1, borderColor: '#3498DB', alignSelf: 'center' },
   copyButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   
-  listSection: { width: '100%', marginBottom: 30, paddingLeft: 16 },
+  listSection: { width: '100%', marginBottom: 30, paddingLeft: 16, marginTop: 20 },
   listHeader: { color: '#8A8D91', fontSize: 14, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
   cardHorizontal: { backgroundColor: '#232D3F', borderRadius: 16, padding: 15, borderLeftWidth: 4, borderLeftColor: '#f1c40f', flexDirection: 'row', alignItems: 'center', width: 280, marginRight: 15, elevation: 3 },
   miniAvatar: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
