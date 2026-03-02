@@ -2,28 +2,55 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { getToken } from '@/services/authStorage';
+import { getToken, getUserDetails } from '@/services/authStorage';
 import { Toast } from 'react-native-toast-message/lib/src/Toast';
 
 const CoachPublicProfile = () => {
   const { coachId, invitationId } = useLocalSearchParams();
   const router = useRouter();
+  const insets = useSafeAreaInsets(); // 🔥 Pour gérer l'espacement du haut proprement
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
 
   const [coach, setCoach] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  
+  const [sendingRequest, setSendingRequest] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<'none' | 'pending'>('none');
+  const [pendingRequestId, setPendingRequestId] = useState<number | null>(null); 
 
   useEffect(() => {
-    fetchCoachProfile();
+    fetchCoachProfileAndStatus();
   }, [coachId]);
 
-  const fetchCoachProfile = async () => {
+  const fetchCoachProfileAndStatus = async () => {
     try {
+      const token = await getToken();
+      const user = await getUserDetails();
+
       const response = await axios.get(`${API_URL}/coaches/${coachId}/public-profile`);
       setCoach(response.data);
+
+      if (user?.id && !invitationId) {
+         try {
+             const requestsRes = await axios.get(`${API_URL}/clients/me/sent-requests?current_user_id=${user.id}`, {
+                 headers: { Authorization: `Bearer ${token}` }
+             });
+             
+             const pendingReq = requestsRes.data.find((req: any) => req.coach_id === Number(coachId));
+             
+             if (pendingReq) {
+                 setRequestStatus('pending'); 
+                 setPendingRequestId(pendingReq.id); 
+             }
+         } catch (e) {
+             console.error("Could not check pending requests", e);
+         }
+      }
+
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Failed to load coach profile.' });
       router.back();
@@ -74,16 +101,72 @@ const CoachPublicProfile = () => {
     }
   };
 
+  const handleRequestCoaching = async () => {
+    setSendingRequest(true);
+    try {
+        const token = await getToken();
+        const user = await getUserDetails();
+        
+        await axios.post(`${API_URL}/clients/me/requests?current_user_id=${user?.id}`, {
+            coach_id: Number(coachId) 
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        Toast.show({ type: 'success', text1: 'Request sent! 🚀', text2: 'The coach has been notified of your request.' });
+        await fetchCoachProfileAndStatus(); 
+        
+    } catch (error: any) {
+        if (error.response?.status === 400) {
+            await fetchCoachProfileAndStatus();
+            Toast.show({ type: 'info', text1: 'Already requested', text2: 'You already have a pending request for this coach.' });
+        } else {
+            Toast.show({ type: 'error', text1: 'Oops!', text2: 'Error sending the request.' });
+        }
+    } finally {
+        setSendingRequest(false);
+    }
+  };
+
+  const handleCancelRequest = () => {
+    if (!pendingRequestId) return;
+
+    Alert.alert(
+      "Cancel Request",
+      "Are you sure you want to cancel your request to this coach?",
+      [
+        { text: "No", style: "cancel" },
+        { 
+          text: "Yes, Cancel", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              const token = await getToken();
+              const user = await getUserDetails();
+              await axios.delete(`${API_URL}/clients/requests/${pendingRequestId}?current_user_id=${user?.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              
+              Toast.show({ type: 'success', text1: 'Request cancelled' });
+              setRequestStatus('none');
+              setPendingRequestId(null);
+            } catch (error) {
+              Toast.show({ type: 'error', text1: 'Error cancelling request' });
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) return <ActivityIndicator size="large" color="#3498DB" style={{ flex: 1, backgroundColor: '#1A1F2B' }} />;
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header avec bouton retour */}
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+  <ScrollView style={styles.container}>
+    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Ionicons name="arrow-back" size={24} color="white" />
       </TouchableOpacity>
 
-      {/* Profil Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarText}>{coach?.firstname?.[0]}</Text>
@@ -94,25 +177,22 @@ const CoachPublicProfile = () => {
         </Text>
       </View>
 
-      {/* Stats Row */}
       <View style={styles.statsContainer}>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{coach?.stats?.active_clients}</Text>
+          <Text style={styles.statValue}>{coach?.stats?.active_clients || 0}</Text>
           <Text style={styles.statLabel}>Clients</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.statValue}>{coach?.stats?.workouts_created}</Text>
+          <Text style={styles.statValue}>{coach?.stats?.workouts_created || 0}</Text>
           <Text style={styles.statLabel}>Workouts</Text>
         </View>
       </View>
 
-      {/* Description */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About Me</Text>
         <Text style={styles.description}>{coach?.description || "No description provided."}</Text>
       </View>
 
-      {/* Certifications */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Certifications</Text>
         {coach?.certifications?.map((cert: string, index: number) => (
@@ -123,31 +203,62 @@ const CoachPublicProfile = () => {
         ))}
       </View>
 
-      {/* BOUTONS D'ACTION */}
-      <View style={styles.actions}>
-        <TouchableOpacity 
-          style={[styles.btn, styles.btnReject]} 
-          onPress={() => handleResponse('rejected')}
-          disabled={processing}
-        >
-          <Text style={styles.btnText}>Decline</Text>
-        </TouchableOpacity>
+      {invitationId ? (
+        <View style={styles.actions}>
+          <TouchableOpacity 
+            style={[styles.btn, styles.btnReject]} 
+            onPress={() => handleResponse('rejected')}
+            disabled={processing}
+          >
+            <Text style={styles.btnText}>Decline</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.btn, styles.btnAccept]} 
-          onPress={() => handleResponse('accepted')}
-          disabled={processing}
-        >
-          {processing ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>Accept Coach</Text>}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity 
+            style={[styles.btn, styles.btnAccept]} 
+            onPress={() => handleResponse('accepted')}
+            disabled={processing}
+          >
+            {processing ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>Accept Coach</Text>}
+          </TouchableOpacity>
+        </View>
+      ) : (
+        // 🔥 NOUVEAU DESIGN DU BOUTON (Pending + Poubelle)
+        requestStatus === 'pending' ? (
+            <View style={styles.pendingRow}>
+                <View style={styles.pendingBadge}>
+                    <Ionicons name="time-outline" size={20} color="#8A8D91" style={{ marginRight: 8 }} />
+                    <Text style={styles.pendingBadgeText}>Pending Request</Text>
+                </View>
+                <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelRequest}>
+                    <Ionicons name="trash-outline" size={24} color="#E74C3C" />
+                </TouchableOpacity>
+            </View>
+        ) : (
+            <TouchableOpacity 
+                style={[styles.requestButton, sendingRequest && { opacity: 0.7 }]} 
+                onPress={handleRequestCoaching}
+                disabled={sendingRequest}
+            >
+                {sendingRequest ? (
+                    <ActivityIndicator color="white" />
+                ) : (
+                    <>
+                        <Ionicons name="paper-plane" size={20} color="white" style={{ marginRight: 10 }} />
+                        <Text style={styles.requestButtonText}>Request Coaching</Text>
+                    </>
+                )}
+            </TouchableOpacity>
+        )
+      )}
+      
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1A1F2B', padding: 20 },
-  backButton: { marginTop: 40, marginBottom: 20 },
+  container: { flex: 1, backgroundColor: '#1A1F2B', paddingHorizontal: 20 }, // J'ai remplacé padding par paddingHorizontal pour bien gérer le haut avec insets
+  backButton: { marginBottom: 15, marginTop: 10 }, // Marge du haut corrigée
   profileHeader: { alignItems: 'center', marginBottom: 30 },
   avatarLarge: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   avatarText: { fontSize: 40, color: 'white', fontWeight: 'bold' },
@@ -162,11 +273,21 @@ const styles = StyleSheet.create({
   description: { color: '#ccc', lineHeight: 22 },
   certItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   certText: { color: '#ccc', marginLeft: 10 },
-  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: 50 },
+  
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: 10 },
   btn: { flex: 1, padding: 15, borderRadius: 12, alignItems: 'center', marginHorizontal: 5 },
   btnReject: { backgroundColor: '#E74C3C' },
   btnAccept: { backgroundColor: '#2ECC71' },
-  btnText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
+  btnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+
+  requestButton: { flexDirection: 'row', backgroundColor: '#3498DB', padding: 18, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 20, elevation: 3, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 2 } },
+  requestButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+
+  // 🔥 Nouveaux styles pour la ligne "Pending + Cancel"
+  pendingRow: { flexDirection: 'row', marginTop: 20, gap: 10 },
+  pendingBadge: { flex: 1, flexDirection: 'row', backgroundColor: '#2A4562', padding: 18, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  pendingBadgeText: { color: '#8A8D91', fontWeight: 'bold', fontSize: 16 },
+  cancelBtn: { backgroundColor: 'rgba(231, 76, 60, 0.1)', paddingHorizontal: 20, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E74C3C' }
 });
 
 export default CoachPublicProfile;

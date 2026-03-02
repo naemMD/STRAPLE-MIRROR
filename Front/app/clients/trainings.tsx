@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { 
   StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, 
-  Modal, ScrollView, Animated, PanResponder, Dimensions, Alert, TouchableWithoutFeedback 
+  Modal, ScrollView, Animated, PanResponder, Dimensions, Alert 
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
@@ -11,7 +10,6 @@ import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { getToken } from '@/services/authStorage';
 
-// --- CONFIGURATION CALENDRIER ---
 LocaleConfig.locales['en'] = {
   monthNames: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
   monthNamesShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
@@ -25,7 +23,6 @@ const SHEET_MIN_Y = SCREEN_HEIGHT * 0.15;
 const SHEET_MAX_Y = SCREEN_HEIGHT * 0.55; 
 
 const TrainingDashboard = () => {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
 
@@ -34,11 +31,9 @@ const TrainingDashboard = () => {
   const [markedDates, setMarkedDates] = useState<any>({});
   const [loading, setLoading] = useState(false);
   
-  // Modal Détails
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<any>(null);
 
-  // Animation
   const panY = useRef(new Animated.Value(SHEET_MAX_Y)).current;
 
   const panResponder = useRef(
@@ -151,7 +146,6 @@ const TrainingDashboard = () => {
       setDetailModalVisible(true);
   };
 
-  // --- NOUVEAU : Fonction de parsing sécurisée pour éviter les crashs ---
   const safeParseSets = (sets: any) => {
     if (!sets) return [];
     if (typeof sets === 'string') {
@@ -206,7 +200,7 @@ const TrainingDashboard = () => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       
       <View style={styles.fixedBackground}>
           <View style={styles.header}>
@@ -278,15 +272,12 @@ const TrainingDashboard = () => {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* --- MODALE DÉTAILS --- */}
       <Modal visible={detailModalVisible} animationType="slide" transparent onRequestClose={() => setDetailModalVisible(false)}>
-          {/* TouchableOpacity parent pour fermer au clic à l'extérieur */}
           <TouchableOpacity 
             style={styles.modalBackground} 
             activeOpacity={1} 
             onPressOut={() => setDetailModalVisible(false)}
           >
-              {/* TouchableOpacity enfant pour bloquer la fermeture si on clique SUR la modale */}
               <TouchableOpacity activeOpacity={1} style={styles.modalContainer}>
                   {selectedWorkout && (
                       <>
@@ -323,7 +314,6 @@ const TrainingDashboard = () => {
                                         </View>
                                     </View>
                                     
-                                    {/* Affichage liste des Séries */}
                                     <View style={styles.setsContainer}>
                                         {safeParseSets(exo.sets_details).map((s: any, i: number) => (
                                             <View key={i} style={styles.setRow}>

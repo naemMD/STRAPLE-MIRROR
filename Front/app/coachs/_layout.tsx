@@ -1,106 +1,88 @@
 import { Stack, router, usePathname } from "expo-router";
-import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CoachLayout() {
   const pathname = usePathname();
 
-  // Pages where we hide the footer and show the back button
+  // 🔥 On ajoute "client-details" ici pour masquer le footer
   const isSpecialPage =
     pathname === "/coachs/profile" ||
-    pathname === "/coachs/subscription";
+    pathname === "/coachs/subscription" ||
+    pathname === "/coachs/client-details";
+
+  // 🔥 On crée une variable spécifique pour les pages qui ne doivent avoir AUCUN header (NutriTrain)
+  const hideGlobalHeader = pathname === "/coachs/client-details";
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={{ flex: 1, backgroundColor: "#0D1117" }}>
 
-        {/* HEADER */}
-        <View style={styles.header}>
-          
-          {/* LEFT SIDE: Profile or Back */}
-          {isSpecialPage ? (
-            <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={28} color="white" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity onPress={() => router.push("/coachs/profile")}>
-              <View style={styles.profilePlaceholder}>
-                <Ionicons name="person" size={20} color="white" />
-              </View>
-            </TouchableOpacity>
-          )}
+        {/* HEADER : On ne l'affiche QUE si ce n'est pas hideGlobalHeader */}
+        {!hideGlobalHeader && (
+          <View style={styles.header}>
+            
+            {/* LEFT SIDE: Profile or Back */}
+            {isSpecialPage ? (
+              <TouchableOpacity onPress={() => router.back()}>
+                <Ionicons name="arrow-back" size={28} color="white" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => router.push("/coachs/profile")}>
+                <View style={styles.profilePlaceholder}>
+                  <Ionicons name="person" size={20} color="white" />
+                </View>
+              </TouchableOpacity>
+            )}
 
-          {/* TITLE */}
-          <Text style={styles.appName}>
-            <Text style={styles.appNameBlue}>NUTRI</Text>
-            <Text style={styles.appNameWhite}>TRAIN</Text>
-          </Text>
+            {/* TITLE */}
+            <Text style={styles.appName}>
+              <Text style={styles.appNameBlue}>NUTRI</Text>
+              <Text style={styles.appNameWhite}>TRAIN</Text>
+            </Text>
 
-          {/* RIGHT SIDE: Subscription Star */}
-          {isSpecialPage ? (
-            <View style={{ width: 30 }} /> 
-          ) : (
-            <TouchableOpacity 
-              style={styles.starButton}
-              onPress={() => router.push("/coachs/subscription")}
-            >
-              <Ionicons name="star" size={28} color="#EAEA45" />
-            </TouchableOpacity>
-          )}
-        </View>
+            {/* RIGHT SIDE: Subscription Star */}
+            {isSpecialPage ? (
+              <View style={{ width: 30 }} /> 
+            ) : (
+              <TouchableOpacity 
+                style={styles.starButton}
+                onPress={() => router.push("/coachs/subscription")}
+              >
+                <Ionicons name="star" size={28} color="#EAEA45" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* PAGE CONTENT */}
         <View style={{ flex: 1 }}>
+          {/* On garde un seul Stack ici pour afficher les pages */}
           <Stack screenOptions={{ headerShown: false }} />
         </View>
 
-        {/* FOOTER: Now with 5 Items including Messages and Settings */}
+        {/* FOOTER */}
         {!isSpecialPage && (
           <View style={styles.footer}>
-            {/* HOME */}
             <TouchableOpacity onPress={() => router.push("/coachs/home")}>
-              <Ionicons 
-                name="home" 
-                size={26} 
-                color={pathname === "/coachs/home" ? "#3498DB" : "white"} 
-              />
+              <Ionicons name="home" size={26} color={pathname === "/coachs/home" ? "#3498DB" : "white"} />
             </TouchableOpacity>
 
-            {/* CLIENTS LIST */}
             <TouchableOpacity onPress={() => router.push("/coachs/client-list")}>
-              <Ionicons 
-                name="people" 
-                size={26} 
-                color={pathname === "/coachs/client-list" ? "#3498DB" : "white"} 
-              />
+              <Ionicons name="people" size={26} color={pathname === "/coachs/client-list" ? "#3498DB" : "white"} />
             </TouchableOpacity>
 
-            {/* MESSAGES */}
             <TouchableOpacity onPress={() => router.push("/coachs/message-list")}>
-              <Ionicons 
-                name="chatbubbles" 
-                size={26} 
-                color={pathname === "/coachs/messages-list" ? "#3498DB" : "white"} 
-              />
+              <Ionicons name="chatbubbles" size={26} color={pathname === "/coachs/message-list" ? "#3498DB" : "white"} />
             </TouchableOpacity>
 
-            {/* FORUM (Icône mise à jour pour être plus explicite) */}
             <TouchableOpacity onPress={() => router.push("/coachs/forum")}>
-              <Ionicons 
-                name="newspaper" // <-- Plus explicite pour un flux de forum / feed
-                size={26} 
-                color={pathname === "/coachs/forum" ? "#3498DB" : "white"} 
-              />
+              <Ionicons name="newspaper" size={26} color={pathname === "/coachs/forum" ? "#3498DB" : "white"} />
             </TouchableOpacity>
 
-            {/* SETTINGS */}
             <TouchableOpacity onPress={() => router.push("/coachs/settings")}>
-              <Ionicons 
-                name="settings" 
-                size={26} 
-                color={pathname === "/coachs/settings" ? "#3498DB" : "white"} 
-              />
+              <Ionicons name="settings" size={26} color={pathname === "/coachs/settings" ? "#3498DB" : "white"} />
             </TouchableOpacity>
           </View>
         )}
@@ -136,11 +118,11 @@ const styles = StyleSheet.create({
     height: 75,
     backgroundColor: "#161B22",
     flexDirection: "row",
-    justifyContent: "space-between", // Changé de space-around à space-between pour 5 items
+    justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: "#222",
-    paddingHorizontal: 20, // Ajout d'un padding horizontal pour équilibrer
+    paddingHorizontal: 20,
     paddingBottom: 10,
   },
 });

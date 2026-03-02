@@ -7,6 +7,31 @@ from typing import List, Optional, Dict
 from datetime import datetime
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+class LocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
+
+class ClientCoachRequestCreate(BaseModel):
+    coach_id: int
+
+class CoachSearchResponse(BaseModel):
+    id: int
+    firstname: str
+    lastname: str
+    city: Optional[str] = None
+    distance: Optional[float] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class ClientCoachRequest(Base):
+    __tablename__ = "client_coach_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    coach_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 class Message(Base):
     __tablename__ = "messages"
 
@@ -326,6 +351,10 @@ class MacroUpdate(BaseModel):
     goal_fats: Optional[float] = None
 
 __all__ = [
+    "LocationUpdate",
+    "CoachSearchResponse",
+    "ClientCoachRequestCreate",
+    "ClientCoachRequest",
     "Message",
     "MessageCreate",
     "MessageRead",

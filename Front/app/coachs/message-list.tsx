@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -8,7 +7,6 @@ import Constants from 'expo-constants';
 import { getToken, getUserDetails } from '@/services/authStorage';
 
 const MessagesListScreen = () => {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
   
@@ -18,9 +16,8 @@ const MessagesListScreen = () => {
   const fetchConversations = async () => {
     try {
       const token = await getToken();
-      const user = await getUserDetails(); // Assure-toi d'avoir l'ID de l'utilisateur
+      const user = await getUserDetails(); 
       
-      // Adapte l'URL selon la façon dont tu passes l'ID au backend (query param ou extrait du token)
       const response = await axios.get(`${API_URL}/messages/conversations?current_user_id=${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -55,7 +52,7 @@ const MessagesListScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={28} color="#3498DB" />
@@ -81,7 +78,7 @@ const MessagesListScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15, marginTop: 10 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: 'white' },
   convItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2A4562', padding: 15, borderRadius: 12, marginBottom: 10 },
   avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: 15 },

@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Switch, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { clearSession } from '@/services/authStorage';
 
-const NotificationsScreen = () => {
-  const insets = useSafeAreaInsets();
+const SettingsPage = () => {
   const router = useRouter();
 
   const [notifications, setNotifications] = useState({
@@ -59,14 +57,14 @@ const NotificationsScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <Text style={styles.mainTitle}>Settings</Text>
 
         <Text style={styles.sectionLabel}>PERSONAL DETAILS</Text>
         <View style={styles.sectionCard}>
           <SettingRow icon="person-outline" title="Edit Profile Info" onPress={() => {}} />
-          <SettingRow icon=" Medical-outline" title="Health Metrics (BMI, Body Fat)" onPress={() => {}} />
+          <SettingRow icon="medical-outline" title="Health Metrics (BMI, Body Fat)" onPress={() => {}} />
           <SettingRow icon="lock-closed-outline" title="Change Password" onPress={() => {}} isLast />
         </View>
 
@@ -145,6 +143,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     paddingHorizontal: 16,
+    marginTop: 15,
   },
   mainTitle: {
     fontSize: 28,
@@ -200,4 +199,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default NotificationsScreen;
+export default SettingsPage;

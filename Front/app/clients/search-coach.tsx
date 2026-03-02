@@ -1,121 +1,160 @@
-// FRONTapp/app/clients/search-coach.tsx
-import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, Text, View, TextInput, TouchableOpacity, 
-  FlatList, ActivityIndicator, Alert, Keyboard 
-} from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
+import * as Location from 'expo-location';
+import { getToken, getUserDetails } from '@/services/authStorage';
+import Toast from 'react-native-toast-message';
 
 export default function SearchCoachScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [citySearch, setCitySearch] = useState('');
   const [coaches, setCoaches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Charger tous les coachs au lancement de la page (sans filtre)
-  useEffect(() => {
-    fetchCoaches();
-  }, []);
-
-  // Fonction pour appeler l'API
-  const fetchCoaches = async (cityQuery: string = '') => {
+  // Search by City
+  const searchByCity = async () => {
+    if (!citySearch.trim()) return;
+    
+    Keyboard.dismiss();
     setLoading(true);
+    
     try {
-      const response = await axios.get(`${API_URL}/clients/search-coaches`, {
-        params: { city: cityQuery }
+      const token = await getToken();
+      const res = await axios.get(`${API_URL}/coaches/search?city=${encodeURIComponent(citySearch)}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      setCoaches(response.data);
+      setCoaches(res.data);
     } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Erreur', 'Impossible de récupérer la liste des coachs.');
+      console.error("City search error:", error);
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not fetch coaches.' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = () => {
-    Keyboard.dismiss(); // Cache le clavier
-    fetchCoaches(searchQuery);
-  };
+  // Search by GPS Location & Save to DB
+  const searchByLocation = async () => {
+    setLoading(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Location access is required to find nearby coaches.' });
+        setLoading(false);
+        return;
+      }
 
-  const clearSearch = () => {
-    setSearchQuery('');
-    fetchCoaches('');
-  };
-
-  // Design de la carte d'un coach
-  const renderCoachCard = ({ item }: { item: any }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.firstname ? item.firstname[0].toUpperCase() : '?'}</Text>
-        </View>
-        <View style={styles.coachInfo}>
-          <Text style={styles.coachName}>{item.firstname} {item.lastname}</Text>
-          <Text style={styles.coachCity}>
-            <Ionicons name="location-outline" size={14} color="#aaa" /> {item.city || 'Non spécifié'}
-          </Text>
-        </View>
-      </View>
+      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const token = await getToken();
+      const user = await getUserDetails();
       
-      <TouchableOpacity 
-        style={styles.requestButton}
-        onPress={() => Alert.alert('Coming Soon 🚀', `Tu pourras bientôt envoyer une demande à ${item.firstname} !`)}
-      >
-        <Text style={styles.requestButtonText}>Demander un suivi</Text>
-      </TouchableOpacity>
-    </View>
+      // 1. Fetch nearby coaches
+      const res = await axios.get(`${API_URL}/coaches/search?lat=${location.coords.latitude}&lon=${location.coords.longitude}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCoaches(res.data);
+
+      // 2. Save location to database quietly in the background
+      if (user?.id) {
+          await axios.patch(`${API_URL}/users/me/location?current_user_id=${user.id}`, {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude
+          }, {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+      }
+
+    } catch (error) {
+      console.error("GPS Error:", error);
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to get your current location.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderCoach = ({ item }: { item: any }) => (
+    <TouchableOpacity 
+      style={styles.coachCard}
+      onPress={() => router.push({ pathname: '/clients/coach-public-profile', params: { coachId: item.id } })}
+    >
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>
+            {item.firstname ? item.firstname[0].toUpperCase() : '?'}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.coachName}>
+            {item.firstname || 'Coach'} {item.lastname || ''}
+        </Text>
+        <Text style={styles.coachCity}>
+          <Ionicons name="location" size={12} color="#8A8D91" /> {item.city || 'Not specified'}
+        </Text>
+      </View>
+      {item.distance != null && (
+        <View style={styles.distanceBadge}>
+          <Text style={styles.distanceText}>{item.distance} km</Text>
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={24} color="#3498DB" />
+    </TouchableOpacity>
   );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      
-      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={{ padding: 5 }}>
           <Ionicons name="arrow-back" size={28} color="#3498DB" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Trouver un Coach</Text>
-        <View style={{ width: 38 }} /> {/* Spacer pour centrer le titre */}
+        <Text style={styles.title}>Find a Coach</Text>
+        <View style={{ width: 38 }} />
       </View>
 
-      {/* BARRE DE RECHERCHE */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#8A8D91" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher par ville (ex: Marseille)"
-          placeholderTextColor="#8A8D91"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={clearSearch} style={styles.clearIcon}>
-            <Ionicons name="close-circle" size={20} color="#8A8D91" />
+      <View style={styles.searchSection}>
+        {/* Search Bar */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Search a city (e.g., Paris)"
+            placeholderTextColor="#8A8D91"
+            value={citySearch}
+            onChangeText={setCitySearch}
+            onSubmitEditing={searchByCity}
+          />
+          <TouchableOpacity style={styles.searchIconBtn} onPress={searchByCity}>
+            <Ionicons name="search" size={20} color="white" />
           </TouchableOpacity>
-        )}
+        </View>
+
+        {/* Action Buttons: GPS and Map */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.gpsBtn} onPress={searchByLocation}>
+            <Ionicons name="navigate" size={20} color="white" style={{ marginRight: 8 }} />
+            <Text style={styles.btnText}>Near me</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.mapBtn} onPress={() => router.push('/clients/map-search')}>
+            <Ionicons name="map" size={20} color="white" style={{ marginRight: 8 }} />
+            <Text style={styles.btnText}>Open Map</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* RÉSULTATS */}
       {loading ? (
         <ActivityIndicator size="large" color="#3498DB" style={{ marginTop: 50 }} />
       ) : (
         <FlatList
           data={coaches}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={renderCoachCard}
-          contentContainerStyle={styles.listContainer}
+          renderItem={renderCoach}
+          contentContainerStyle={{ padding: 16 }}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>Aucun coach trouvé dans cette ville.</Text>
+            <Text style={styles.emptyText}>Search for a city or use your location to find a coach.</Text>
           }
         />
       )}
@@ -125,29 +164,25 @@ export default function SearchCoachScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 15 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: 'white' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 15 },
+  title: { fontSize: 20, fontWeight: 'bold', color: 'white' },
+  searchSection: { paddingHorizontal: 16, marginBottom: 10 },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2A4562', borderRadius: 12, marginBottom: 15 },
+  input: { flex: 1, color: 'white', padding: 15, fontSize: 16 },
+  searchIconBtn: { backgroundColor: '#3498DB', padding: 15, borderTopRightRadius: 12, borderBottomRightRadius: 12 },
   
-  // Barre de recherche
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2A4562', marginHorizontal: 20, borderRadius: 10, paddingHorizontal: 15, marginBottom: 20 },
-  searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, color: 'white', fontSize: 16, paddingVertical: 12 },
-  clearIcon: { marginLeft: 10 },
+  // Nouveaux styles pour les boutons alignés
+  actionRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  gpsBtn: { flex: 1, flexDirection: 'row', backgroundColor: '#232D3F', padding: 15, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#3498DB', marginRight: 5 },
+  mapBtn: { flex: 1, flexDirection: 'row', backgroundColor: '#3498DB', padding: 15, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginLeft: 5 },
+  btnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   
-  // Liste
-  listContainer: { paddingHorizontal: 20, paddingBottom: 20 },
-  emptyText: { color: '#888', textAlign: 'center', marginTop: 40, fontStyle: 'italic', fontSize: 16 },
-  
-  // Carte Coach
-  card: { backgroundColor: '#2A4562', borderRadius: 15, padding: 15, marginBottom: 15 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-  coachInfo: { marginLeft: 15, flex: 1 },
+  coachCard: { flexDirection: 'row', backgroundColor: '#2A4562', padding: 15, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
+  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  avatarText: { color: 'white', fontWeight: 'bold', fontSize: 20 },
   coachName: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
-  coachCity: { color: '#aaa', fontSize: 14 },
-  
-  // Bouton
-  requestButton: { backgroundColor: 'rgba(46, 204, 113, 0.2)', borderWidth: 1, borderColor: '#2ecc71', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  requestButtonText: { color: '#2ecc71', fontSize: 16, fontWeight: 'bold' }
+  coachCity: { color: '#8A8D91', fontSize: 14 },
+  distanceBadge: { backgroundColor: 'rgba(52, 152, 219, 0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 10 },
+  distanceText: { color: '#3498DB', fontSize: 12, fontWeight: 'bold' },
+  emptyText: { color: '#8A8D91', textAlign: 'center', marginTop: 50, fontSize: 16 }
 });

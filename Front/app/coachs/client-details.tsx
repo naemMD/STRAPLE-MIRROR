@@ -5,7 +5,6 @@ import {
   KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
@@ -33,11 +32,12 @@ const FoodImage = ({ uri, style, iconSize = 24 }: any) => {
 const goalLabels: { [key: string]: string } = {
   'lose_weight': '📉 Weight Loss',
   'maintain_weight': '⚖️ Maintain',
-  'gain_muscle': '💪 Muscle Gain'
+  'gain_muscle': '💪 Muscle Gain',
+  'maintain': '⚖️ Maintain',
+  'get_stronger': '💪 Get Stronger'
 };
 
 const ClientDetailsScreen = () => {
-  const insets = useSafeAreaInsets();
   const navigation = useRouter();
   const params = useLocalSearchParams();
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
@@ -140,9 +140,6 @@ const ClientDetailsScreen = () => {
     setExpandedMeals(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   };
 
-  // ==========================================
-  // NUTRITION GOALS LOGIC
-  // ==========================================
   const openEditModal = () => {
     setEditCalories(clientData?.goal_calories?.toString() || '2500');
     setEditProteins(clientData?.goals_macros?.proteins?.toString() || '150');
@@ -174,9 +171,6 @@ const ClientDetailsScreen = () => {
     }
   };
 
-  // ==========================================
-  // ADVANCED MEAL LOGIC (Search & Calculate)
-  // ==========================================
   const openCreateMealModal = () => {
     setEditingMealId(null);
     setMealName('');
@@ -191,7 +185,6 @@ const ClientDetailsScreen = () => {
     setEditingMealId(meal.id);
     setMealName(meal.name);
     
-    // Parse backend items and reconstruct base per-100g macros for dynamic editing
     const parsedItems = safeParseJSON(meal.aliments || meal.items);
     const mappedItems = parsedItems.map((item: any) => {
         const ratio = item.weight / 100;
@@ -248,7 +241,6 @@ const ClientDetailsScreen = () => {
       const weightNum = parseFloat(foodSearchWeight);
       const ratio = weightNum / 100;
 
-      // We store the per-100g base macro so we can recalculate if coach changes the weight input
       const newItem = {
         id: Date.now() + Math.random(),
         name: item.name, 
@@ -362,7 +354,6 @@ const ClientDetailsScreen = () => {
     isProcessingScan.current = false;
     setScanned(false);
     
-    // Smooth transition between modals
     setIsMealModalVisible(false);
     setTimeout(() => { setIsCameraOpen(true); }, 400);
   };
@@ -404,7 +395,6 @@ const ClientDetailsScreen = () => {
         return;
     }
     
-    // The scanned API generally returns values per 100g. We store them as baseMacros.
     const newItem = { 
         id: Date.now() + Math.random(),
         ...scannedFood, 
@@ -422,9 +412,6 @@ const ClientDetailsScreen = () => {
     setTimeout(() => setIsMealModalVisible(true), 400);
   };
 
-  // ==========================================
-  // WORKOUT LOGIC
-  // ==========================================
   const handleEditWorkout = (workout: any) => {
     setEditingWorkoutId(workout.id);
     setWorkoutName(workout.name);
@@ -517,9 +504,6 @@ const ClientDetailsScreen = () => {
     }
   };
 
-  // ==========================================
-  // RENDER HELPERS
-  // ==========================================
   const renderProgressBar = (label: string, value: number, max: number, color: string) => {
     const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
     return (
@@ -538,7 +522,7 @@ const ClientDetailsScreen = () => {
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.back()}><Ionicons name="arrow-back" size={24} color="white" /></TouchableOpacity>
         <Text style={styles.headerTitle}>Client Dashboard</Text>
@@ -549,30 +533,29 @@ const ClientDetailsScreen = () => {
         <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator size="large" color="#3498DB" /></View>
       ) : (
         <ScrollView contentContainerStyle={styles.content} keyboardDismissMode="on-drag">
-          {/* PROFILE */}
           <View style={styles.profileCard}>
                 <View style={styles.avatar}><Text style={styles.avatarText}>{clientData?.firstname?.[0]}</Text></View>
                 <View style={{marginLeft: 15, flex: 1}}>
                     <Text style={styles.clientName}>{clientData?.firstname} {clientData?.lastname}</Text>
                     <Text style={styles.clientInfo}>{clientData?.age} years old • {clientData?.gender}</Text>
                     
-                    {/* Ligne des badges : Objectif + Mensurations */}
                     <View style={styles.badgesContainer}>
-                        {/* Badge Objectif */}
+                        {/* 🔥 CORRECTIF ICI : Vérification robuste de l'objectif */}
                         <View style={styles.goalBadge}>
                             <Text style={styles.goalBadgeText}>
-                                {clientData?.goal ? goalLabels[clientData.goal] : 'No goal specified'}
+                                {clientData?.goal && goalLabels[clientData.goal] 
+                                    ? goalLabels[clientData.goal] 
+                                    : (clientData?.goal ? `🎯 ${clientData.goal.replace('_', ' ')}` : 'No goal specified')
+                                }
                             </Text>
                         </View>
                         
-                        {/* Badge Poids (S'il est renseigné) */}
                         {clientData?.weight ? (
                             <View style={styles.metricBadge}>
                                 <Text style={styles.metricBadgeText}>{clientData.weight} kg</Text>
                             </View>
                         ) : null}
 
-                        {/* Badge Taille (S'il est renseigné) */}
                         {clientData?.height ? (
                             <View style={styles.metricBadge}>
                                 <Text style={styles.metricBadgeText}>{clientData.height} cm</Text>
@@ -582,7 +565,6 @@ const ClientDetailsScreen = () => {
                 </View>
             </View>
 
-            {/* CALENDAR */}
             <View style={styles.dateNavigator}>
                 <TouchableOpacity onPress={() => changeDate(-1)}><Ionicons name="chevron-back" size={24} color="#3498DB" /></TouchableOpacity>
                 <View style={{ alignItems: 'center' }}>
@@ -592,7 +574,6 @@ const ClientDetailsScreen = () => {
                 <TouchableOpacity onPress={() => changeDate(1)}><Ionicons name="chevron-forward" size={24} color="#3498DB" /></TouchableOpacity>
             </View>
 
-            {/* NUTRITION GLOBALS */}
             <View style={styles.sectionContainer}>
                 <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15}}>
                    <Text style={styles.sectionTitle}>Nutrition Goals</Text>
@@ -612,7 +593,6 @@ const ClientDetailsScreen = () => {
                 </View>
             </View>
 
-            {/* MEALS PLAN (Accordion & Harmonized) */}
             <View style={styles.sectionContainer}>
                 <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10}}>
                    <Text style={styles.sectionTitle}>Meals Plan</Text>
@@ -658,7 +638,6 @@ const ClientDetailsScreen = () => {
                 </View>
             </View>
 
-            {/* WORKOUTS PLAN */}
             <View style={styles.sectionContainer}>
                 <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10}}>
                    <Text style={styles.sectionTitle}>Workouts Plan</Text>
@@ -705,7 +684,7 @@ const ClientDetailsScreen = () => {
         </ScrollView>
       )}
 
-      {/* ADVANCED MEAL BUILDER MODAL */}
+      {/* MODALS (Identiques au reste) */}
       <Modal visible={isMealModalVisible} animationType="slide" transparent>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsMealModalVisible(false)}>
             <TouchableWithoutFeedback>
@@ -802,7 +781,6 @@ const ClientDetailsScreen = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* --- SCANNER CAMERA OVERLAY --- */}
       <Modal visible={isCameraOpen} animationType="slide">
         <View style={{ flex: 1, backgroundColor: 'black' }}>
             <CameraView 
@@ -835,9 +813,8 @@ const ClientDetailsScreen = () => {
         </View>
       </Modal>
 
-      {/* --- DETAIL MODAL (Scan Weight) --- */}
       <Modal visible={isDetailModalVisible} animationType="slide" transparent>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => { /* dismiss */ }}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => { }}>
             <TouchableWithoutFeedback>
                 <View style={[styles.modalContent, {height: 'auto', maxHeight: '60%'}]}>
                     {scannedFood && (
@@ -870,7 +847,6 @@ const ClientDetailsScreen = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* WORKOUT MODAL */}
       <Modal visible={isWorkoutModalVisible} animationType="slide" transparent>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setWorkoutModalVisible(false)}>
             <TouchableWithoutFeedback>
@@ -1015,7 +991,6 @@ const ClientDetailsScreen = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* NUTRITION MACROS MODAL */}
       <Modal animationType="slide" transparent={true} visible={isModalVisible} onRequestClose={() => setModalVisible(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
             <TouchableWithoutFeedback>
@@ -1059,7 +1034,7 @@ const ClientDetailsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#2A4562' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#2A4562', marginTop: 10 },
   headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   content: { padding: 16 },
   profileCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2A4562', borderRadius: 15, padding: 20, marginBottom: 20 },
@@ -1112,7 +1087,6 @@ const styles = StyleSheet.create({
   selectedFoodImage: { width: 35, height: 35, borderRadius: 8, marginRight: 10 },
   selectedFoodInfo: { flex: 1 },
   selectedFoodName: { color: 'white', fontWeight: 'bold', fontSize: 14 },
-  selectedFoodStats: { color: '#aaa', fontSize: 12, marginTop: 2 },
   amountInput: { backgroundColor: '#1A1F2B', color: 'white', width: 50, textAlign: 'center', borderRadius: 4, padding: 4 },
 
   summaryBox: { marginTop: 10, padding: 15, backgroundColor: '#232D3F', borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#2ecc71' },
@@ -1143,13 +1117,10 @@ const styles = StyleSheet.create({
 
   goalBadge: { backgroundColor: 'rgba(52, 152, 219, 0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, alignSelf: 'flex-start', marginTop: 8, borderWidth: 1, borderColor: '#3498DB' },
   goalBadgeText: { color: '#3498DB', fontSize: 12, fontWeight: 'bold' },
-
   badgesContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  
   metricBadge: { backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, marginRight: 8, marginBottom: 5, justifyContent: 'center' },
   metricBadgeText: { color: '#ddd', fontSize: 12, fontWeight: 'bold' },
   
-  // CAMERA OVERLAY
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
   layerTop: { flex: 1, width: '100%', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   layerCenter: { flexDirection: 'row', height: 250 },

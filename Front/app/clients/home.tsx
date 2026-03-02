@@ -6,11 +6,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useFocusEffect, useRouter } from 'expo-router'; // <-- Ajout de useRouter
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { getUserDetails, getToken } from '@/services/authStorage';
 import MealCard from '@/components/MealCard';
@@ -31,8 +30,7 @@ const FoodImage = ({ uri, style, iconSize = 24 }: any) => {
 };
 
 const HomeScreen = () => {
-  const insets = useSafeAreaInsets();
-  const router = useRouter(); // <-- Initialisation du router
+  const router = useRouter(); 
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
 
   // --- STATE DASHBOARD ---
@@ -496,7 +494,7 @@ const HomeScreen = () => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       {/* DASHBOARD */}
@@ -529,7 +527,6 @@ const HomeScreen = () => {
           </View>
       )}
 
-      {/* 📩 BLOC DES INVITATIONS REÇUES (CARROUSEL HORIZONTAL) */}
       {invitations.length > 0 && (
         <View style={styles.invitationContainer}>
           <Text style={styles.invitationTitle}>New Coaching Requests ({invitations.length})</Text>
@@ -566,7 +563,6 @@ const HomeScreen = () => {
         </View>
       )}
 
-      {/* MEALS LIST */}
       <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10}}>
           <Text style={styles.catalogueTitle}>Today's Meals</Text>
       </View>
@@ -583,8 +579,6 @@ const HomeScreen = () => {
         <Ionicons name="add" size={30} color="#fff" />
       </TouchableOpacity>
 
-
-      {/* --- NOUVELLE MODALE : CREATE/EDIT MEAL --- */}
       <Modal visible={isModalVisible} animationType="slide" transparent onRequestClose={handleCloseModal}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', alignItems:'center' }}>
@@ -717,7 +711,6 @@ const HomeScreen = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* --- CAMERA (OVERLAY) --- */}
       <Modal visible={isCameraOpen} animationType="slide">
         <View style={{ flex: 1, backgroundColor: 'black' }}>
             <CameraView 
@@ -753,7 +746,6 @@ const HomeScreen = () => {
         </View>
       </Modal>
 
-      {/* --- DETAIL MODAL (Scan) --- */}
       <Modal visible={isDetailModalVisible} animationType="slide" transparent>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
             <View style={[styles.mealModalContent, {height: 'auto'}]}>
@@ -787,7 +779,6 @@ const HomeScreen = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* VIEW MEAL */}
       <Modal visible={isViewModalVisible} animationType="fade" transparent onRequestClose={() => setIsViewModalVisible(false)}>
         <View style={styles.modalBackground}>
             <View style={styles.modalContainer}>
@@ -818,7 +809,6 @@ const HomeScreen = () => {
         </View>
        </Modal>
 
-       {/* UPDATE GOAL */}
        <Modal visible={isGoalModalVisible} animationType="fade" transparent>
         <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={() => setIsGoalModalVisible(false)}>
             <View style={[styles.modalContainer, {width: '80%'}]}>
@@ -832,16 +822,13 @@ const HomeScreen = () => {
             </View>
         </TouchableOpacity>
       </Modal>
-
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B', paddingHorizontal: 16 },
-  
-  // DASHBOARD
-  statsContainer: { backgroundColor: '#232D3F', borderRadius: 16, padding: 15, marginBottom: 15 },
+  statsContainer: { backgroundColor: '#232D3F', borderRadius: 16, padding: 15, marginBottom: 15, marginTop: 15 }, // 🔥 Added marginTop: 15
   calorieGoalContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   calorieGoalText: { color: 'white' },
   caloriesRemaining: { color: '#bbb', fontSize: 12, marginTop: 4 },
@@ -853,66 +840,14 @@ const styles = StyleSheet.create({
   macroLabel: { color: '#ccc', fontSize: 10 },
   catalogueTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
   mealsContainer: { flex: 1 },
-
-  // --- STYLES INVITATIONS (HOME) ---
-  invitationContainer: {
-    marginVertical: 10,
-  },
-  invitationTitle: {
-    color: '#8A8D91',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  invitationCardHorizontal: {
-    backgroundColor: '#232D3F', 
-    borderRadius: 16,
-    padding: 15,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f1c40f',
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 280, 
-    marginRight: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  miniAvatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: '#3498DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  miniAvatarText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 18,
-  },
-  invitationText: {
-    color: 'white',
-    fontSize: 14,
-  },
-  coachCityText: {
-    color: '#8A8D91',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  viewProfileLink: {
-    color: '#f1c40f',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: 'bold',
-  },
-  
-  // SHARED UI
+  invitationContainer: { marginVertical: 10 },
+  invitationTitle: { color: '#8A8D91', fontSize: 12, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  invitationCardHorizontal: { backgroundColor: '#232D3F', borderRadius: 16, padding: 15, borderLeftWidth: 4, borderLeftColor: '#f1c40f', flexDirection: 'row', alignItems: 'center', width: 280, marginRight: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
+  miniAvatar: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  miniAvatarText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+  invitationText: { color: 'white', fontSize: 14 },
+  coachCityText: { color: '#8A8D91', fontSize: 12, marginTop: 2 },
+  viewProfileLink: { color: '#f1c40f', fontSize: 12, marginTop: 4, fontWeight: 'bold' },
   addButton: { position: 'absolute', bottom: 20, right: 20, backgroundColor: '#3498DB', width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', elevation: 5 },
   modalBackground: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
   modalContainer: { width: "90%", backgroundColor: "#2A4562", borderRadius: 15, padding: 20, maxHeight: '90%' }, 
@@ -920,12 +855,9 @@ const styles = StyleSheet.create({
   closeButton: { backgroundColor: '#e74c3c', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 10, width:'100%' },
   createButton: { backgroundColor: '#3498DB', padding: 15, borderRadius: 10, alignItems: 'center', width:'100%' },
   modalAddButton: { backgroundColor: '#2ecc71', padding: 12, borderRadius: 8, alignItems: 'center', minWidth: 80 },
-  
   resultItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth:1, borderBottomColor:'#333' },
   resultImage: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
   resultText: { color: 'white', fontWeight: 'bold', flex: 1 },
-
-  // CAMERA OVERLAY
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
   layerTop: { flex: 1, width: '100%', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   layerCenter: { flexDirection: 'row', height: 250 },
@@ -935,28 +867,20 @@ const styles = StyleSheet.create({
   layerBottom: { flex: 1, width: '100%', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   corner: { position: 'absolute', width: 20, height: 20, borderColor: 'white' },
   closeCameraButton: { position: 'absolute', bottom: 50, alignSelf:'center', backgroundColor:'white', width:60, height:60, borderRadius:30, justifyContent:'center', alignItems:'center' },
-
-  // ============================================================
-  // NOUVEAUX STYLES "ADVANCED MEAL BUILDER" 
-  // ============================================================
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
   mealModalContent: { backgroundColor: '#1A1F2B', borderRadius: 15, padding: 20, borderWidth: 1, borderColor: '#2ecc71', maxHeight: '90%', width: '100%' },
   modalTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
   inputLabelModal: { color: '#aaa', marginBottom: 8, fontSize: 13, fontWeight: 'bold' },
   inputModal: { backgroundColor: '#2A4562', color: 'white', padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 10 },
-  
   timeButtonNew: { backgroundColor: '#2A4562', padding: 12, borderRadius: 8, marginBottom: 10, flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   timeTextNew: { color: 'white', fontWeight: 'bold' },
-
   searchRowNew: { flexDirection: 'row', gap: 10, marginBottom: 15 },
   searchBtnNew: { backgroundColor: '#3498DB', padding: 12, borderRadius: 8, justifyContent: 'center', width: 44, alignItems:'center' },
   scanBtnNew: { backgroundColor: '#9b59b6', padding: 12, borderRadius: 8, justifyContent: 'center', width: 44, alignItems:'center' },
-  
   resultsBoxNew: { backgroundColor: '#1E2C3D', borderRadius: 8, padding: 5, maxHeight: 150, marginBottom: 10 },
   resultItemNew: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: '#333' },
   resultImageNew: { width: 30, height: 30, borderRadius: 15, marginRight: 10 },
   resultTextNew: { color: 'white', fontWeight: 'bold', flex: 1 },
-
   fixedListContainerNew: { height: 180, marginBottom: 10, flexShrink: 1 },
   modalActionsNew: { flexDirection: 'row', marginTop: 15, width:'100%', paddingBottom: 5 },
   emptyListPlaceholderNew: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#444', borderStyle: 'dashed', borderRadius: 8, backgroundColor: '#253545' },
@@ -965,11 +889,9 @@ const styles = StyleSheet.create({
   selectedFoodInfoNew: { flex: 1 },
   selectedFoodNameNew: { color: 'white', fontWeight: 'bold', fontSize: 14 },
   amountInputNew: { backgroundColor: '#1A1F2B', color: 'white', width: 50, textAlign: 'center', borderRadius: 4, padding: 4, fontSize: 12 },
-
   summaryBoxNew: { marginTop: 10, padding: 15, backgroundColor: '#232D3F', borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#2ecc71' },
   summaryTitleNew: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   summaryTextNew: { color: '#aaa', fontSize: 12, marginTop: 4 },
-
   modalButtonNew: { flex: 0.48, padding: 15, borderRadius: 8, alignItems: 'center', justifyContent:'center' },
   cancelButtonNew: { backgroundColor: '#e74c3c' },
   saveButtonNew: { backgroundColor: '#2ecc71' },

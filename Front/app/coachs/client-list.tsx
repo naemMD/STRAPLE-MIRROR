@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import Constants from 'expo-constants';
@@ -11,7 +10,6 @@ import Toast from 'react-native-toast-message';
 const { width } = Dimensions.get('window');
 
 const CoachListScreen = () => {
-  const insets = useSafeAreaInsets();
   const navigation = useRouter();
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
   
@@ -28,7 +26,6 @@ const CoachListScreen = () => {
     if (!id) return;
     try {
         const token = await getToken();
-        console.log("token for deletion:", token);
         const response = await axios.get(`${API_URL}/coaches/${id}/clients`, {
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -151,7 +148,6 @@ const CoachListScreen = () => {
       });
   };
 
-  // 🔥 NOUVELLE FONCTION POUR OUVRIR LE CHAT 🔥
   const handleContactClient = (client: any) => {
       navigation.push({
           pathname: "/chat/[id]",
@@ -159,7 +155,6 @@ const CoachListScreen = () => {
       });
   };
 
-  // --- RENDU ITEMS ---
   const renderClientItem = ({ item }: any) => (
     <View style={styles.clientItem}>
       <View style={styles.clientInfoContainer}>
@@ -176,7 +171,6 @@ const CoachListScreen = () => {
       </View>
       
       <View style={styles.actionButtonsContainer}>
-        {/* 🔥 ON PASSE LE CLIENT (item) À LA FONCTION ICI 🔥 */}
         <TouchableOpacity style={styles.actionButton} onPress={() => handleContactClient(item)}>
           <Text style={styles.actionButtonText}>Contact</Text>
         </TouchableOpacity>
@@ -189,9 +183,8 @@ const CoachListScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       
-      {/* HEADER */}
       <View style={styles.header}>
           <Text style={styles.headerTitle}>My Clients</Text>
           <TouchableOpacity style={styles.addClientBtn} onPress={() => setIsModalVisible(true)}>
@@ -200,7 +193,6 @@ const CoachListScreen = () => {
           </TouchableOpacity>
       </View>
 
-      {/* SECTION : INVITATIONS ENVOYÉES (PENDING / REJECTED) */}
       {sentInvitations.length > 0 && (
         <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
           <Text style={styles.sectionLabel}>Sent Invitations</Text>
@@ -224,7 +216,6 @@ const CoachListScreen = () => {
         </View>
       )}
 
-      {/* SECTION : LISTE DES CLIENTS ACTIFS */}
       <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
           <Text style={styles.sectionLabel}>Active Clients</Text>
       </View>
@@ -247,7 +238,6 @@ const CoachListScreen = () => {
         />
       )}
 
-      {/* MODAL : INVITE CLIENT */}
       <Modal visible={isModalVisible} transparent animationType="slide">
           <View style={styles.modalBackground}>
               <View style={styles.modalContainer}>
@@ -294,13 +284,12 @@ const CoachListScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15, marginTop: 10 },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: 'white' },
   addClientBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3498DB', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 },
   addClientText: { color: 'white', fontWeight: 'bold', marginLeft: 5 },
   sectionLabel: { color: '#8A8D91', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 },
   invitationItem: { backgroundColor: '#1E2C3D', borderRadius: 12, padding: 12, marginTop: 10, flexDirection: 'row', alignItems: 'center', borderLeftWidth: 4 },
-  
   clientList: { paddingHorizontal: 16, paddingBottom: 20 },
   clientItem: { backgroundColor: '#2A4562', borderRadius: 10, marginBottom: 16, padding: 12 },
   clientInfoContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
@@ -308,7 +297,6 @@ const styles = StyleSheet.create({
   clientDetails: { marginLeft: 10 },
   clientName: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
   clientMeta: { color: '#FFFFFF', fontSize: 14, textTransform: 'capitalize' },
-  
   actionButtonsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 5 },
   actionButton: { backgroundColor: '#3498DB', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, alignItems: 'center', width: width * 0.35 },
   actionButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },

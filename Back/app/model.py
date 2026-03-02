@@ -36,6 +36,9 @@ async def get_user_by_id(session: AsyncSession, user_id):
             "unique_code": user.unique_code,
             "description": user.description,
             "city": user.city,
+            "latitude": user.latitude,
+            "longitude": user.longitude,
+            "goal": user.goal,
             "height": user.height,
             "weight": user.weight,
             "created_at": str(user.created_at)
@@ -75,7 +78,8 @@ async def register_user(session: AsyncSession, user_data: dict):
         unique_code=generated_code,
         city=user_data.get("city") if role_str == 'coach' else None,
         latitude=user_data.get("latitude") if role_str == 'coach' else None,
-        longitude=user_data.get("longitude") if role_str == 'coach' else None
+        longitude=user_data.get("longitude") if role_str == 'coach' else None,
+        goal=user_data.get("goal") if role_str == 'client' else None
     )
 
     new_user.password = user_data["password"]

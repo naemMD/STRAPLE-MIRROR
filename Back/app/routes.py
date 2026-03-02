@@ -13,6 +13,7 @@ from jose import JWTError, jwt
 from dotenv import load_dotenv
 from datetime import datetime
 import os
+import math
 
 router = APIRouter()
 load_dotenv()
@@ -29,6 +30,16 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)):
         return int(user_id)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    
+def calculate_distance(lat1, lon1, lat2, lon2):
+    if None in (lat1, lon1, lat2, lon2):
+        return None
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
 @router.post("/coaches/clients/{client_id}/workouts/create", status_code=201)
 async def create_workout_for_client_route(
@@ -348,7 +359,6 @@ async def create_meal_for_client(
     client_id: int,
     meal_data: MealCreateByCoach,
     session: AsyncSession = Depends(get_session),
-    current_user: Any = Depends(get_current_user_id)
 ):
     client_result = await session.execute(select(Users).where(Users.id == client_id))
     client = client_result.scalars().first()
@@ -435,6 +445,7 @@ async def get_client_details_full(
         "lastname": client.lastname,
         "age": client.age,
         "gender": client.gender,
+        "goal": client.goal,
         "goal_calories": client.daily_caloric_needs or 2500,
         "goals_macros": {
             "proteins": client.goal_proteins or 150,
@@ -600,65 +611,6 @@ async def update_user_goals(
 
     await session.commit()
     return {"message": "Goals updated successfully"}
-
-@router.get("/coaches/client-details/{client_id}")
-async def get_client_details_full(client_id: int, session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(Users).where(Users.id == client_id))
-    client = result.scalars().first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    today = datetime.now().date()
-    
-    result_meals = await session.execute(
-        select(Meal).where(Meal.user_id == client_id, func.date(Meal.hourtime) == today)
-    )
-    meals = result_meals.scalars().all()
-
-    result_workouts = await session.execute(
-        select(Workout).where(Workout.user_id == client_id, func.date(Workout.scheduled_date) == today)
-    )
-    workouts = result_workouts.scalars().all()
-    
-    current_cals = sum(m.total_calories for m in meals if m.is_consumed)
-    current_prot = sum(m.total_proteins for m in meals if m.is_consumed)
-    current_carb = sum(m.total_carbohydrates for m in meals if m.is_consumed)
-    current_fat  = sum(m.total_lipids for m in meals if m.is_consumed)
-
-    return {
-        "id": client.id,
-        "firstname": client.firstname,
-        "lastname": client.lastname,
-        "age": client.age,
-        "gender": client.gender,
-        "goal_calories": client.daily_caloric_needs or 2500,
-        "goals_macros": {
-            "proteins": client.goal_proteins or 150,
-            "carbs": client.goal_carbs or 250,
-            "fats": client.goal_fats or 70
-        },
-        "today_stats": {
-            "calories": current_cals,
-            "proteins": current_prot,
-            "carbs": current_carb,
-            "fats": current_fat
-        },
-        "meals_today": [
-            {
-                "id": m.id,
-                "name": m.aliment_name or "Repas",
-                "calories": m.total_calories,
-                "is_consumed": m.is_consumed
-            } for m in meals
-        ],
-        "workouts_today": [
-            {
-                "id": w.id,
-                "name": w.name,
-                "is_completed": w.is_completed
-            } for w in workouts
-        ]
-    }
 
 @router.get("/clients/search-coaches")
 async def search_coaches(
@@ -933,7 +885,6 @@ async def get_conversations(
     conversations.sort(key=lambda x: x["last_message_time"] or datetime.min, reverse=True)
     return conversations
 
-
 @router.get("/messages/{other_user_id}", response_model=list[MessageRead])
 async def get_chat_history(
     other_user_id: int,
@@ -951,7 +902,6 @@ async def get_chat_history(
         .order_by(Message.timestamp.asc())
     )
     return req.scalars().all()
-
 
 @router.post("/messages", response_model=MessageRead)
 async def send_message(
@@ -1022,3 +972,203 @@ async def mark_messages_as_read(
     await session.execute(stmt)
     await session.commit()
     return {"message": "Messages marqués comme lus"}
+
+@router.get("/coaches/search", response_model=list[CoachSearchResponse])
+async def search_coaches(
+    city: str = None, 
+    lat: float = None, 
+    lon: float = None, 
+    session: AsyncSession = Depends(get_session)
+):
+    query = select(Users).where(Users.role == 'coach')
+    
+    if city:
+        query = query.where(Users.city.ilike(f"%{city}%"))
+        
+    result = await session.execute(query)
+    coaches = result.scalars().all()
+
+    response_data = []
+    
+    for coach in coaches:
+        dist = calculate_distance(lat, lon, coach.latitude, coach.longitude)
+        dist_rounded = round(dist, 1) if dist is not None else None
+        
+        response_data.append({
+            "id": coach.id,
+            "firstname": coach.firstname,
+            "lastname": coach.lastname,
+            "city": coach.city,
+            "distance": dist_rounded,
+            "latitude": coach.latitude,
+            "longitude": coach.longitude
+        })
+        
+    if lat is not None and lon is not None:
+        response_data.sort(key=lambda x: x["distance"] if x["distance"] is not None else float('inf'))
+        
+    return response_data
+
+@router.post("/clients/me/requests")
+async def create_client_request(
+    req: ClientCoachRequestCreate,
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    existing_req = await session.execute(
+        select(ClientCoachRequest)
+        .where(and_(
+            ClientCoachRequest.client_id == current_user_id,
+            ClientCoachRequest.coach_id == req.coach_id,
+            ClientCoachRequest.status == 'pending'
+        ))
+    )
+    if existing_req.scalars().first():
+        raise HTTPException(status_code=400, detail="Une demande est déjà en attente pour ce coach.")
+
+    new_request = ClientCoachRequest(
+        client_id=current_user_id,
+        coach_id=req.coach_id
+    )
+    session.add(new_request)
+    await session.commit()
+    
+    return {"message": "Demande envoyée avec succès."}
+
+@router.patch("/users/me/location")
+async def update_user_location(
+    location: LocationUpdate,
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = (
+        update(Users)
+        .where(Users.id == current_user_id)
+        .values(latitude=location.latitude, longitude=location.longitude)
+    )
+    await session.execute(stmt)
+    await session.commit()
+    return {"message": "Location updated successfully"}
+
+@router.get("/clients/me/sent-requests")
+async def get_client_sent_requests(
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    query = (
+        select(ClientCoachRequest, Users)
+        .join(Users, ClientCoachRequest.coach_id == Users.id)
+        .where(
+            and_(
+                ClientCoachRequest.client_id == current_user_id,
+                ClientCoachRequest.status == 'pending'
+            )
+        )
+    )
+    result = await session.execute(query)
+    rows = result.all()
+    
+    response = []
+    for req, coach in rows:
+        response.append({
+            "id": req.id,
+            "coach_id": coach.id,
+            "coach_firstname": coach.firstname,
+            "coach_lastname": coach.lastname,
+            "coach_city": coach.city,
+            "status": req.status
+        })
+    return response
+
+@router.delete("/clients/requests/{request_id}")
+async def cancel_client_request(
+    request_id: int,
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = select(ClientCoachRequest).where(
+        and_(ClientCoachRequest.id == request_id, ClientCoachRequest.client_id == current_user_id)
+    )
+    result = await session.execute(stmt)
+    req = result.scalars().first()
+    
+    if req:
+        await session.delete(req)
+        await session.commit()
+    return {"message": "Request cancelled successfully"}
+
+@router.patch("/coaches/requests/{request_id}")
+async def respond_to_client_request(
+    request_id: int,
+    status: str,
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    stmt = select(ClientCoachRequest).where(
+        and_(
+            ClientCoachRequest.id == request_id,
+            ClientCoachRequest.coach_id == current_user_id
+        )
+    )
+    result = await session.execute(stmt)
+    req = result.scalars().first()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Demande introuvable.")
+
+    if status == 'accepted':
+        await session.execute(
+            update(Users)
+            .where(Users.id == req.client_id)
+            .values(coach_id=current_user_id)
+        )
+
+        await session.execute(
+            delete(ClientCoachRequest)
+            .where(
+                and_(
+                    ClientCoachRequest.client_id == req.client_id,
+                    ClientCoachRequest.id != request_id
+                )
+            )
+        )
+
+        req.status = 'accepted'
+
+    elif status == 'rejected':
+        await session.delete(req)
+
+    await session.commit()
+    
+    return {"message": f"Demande {status} avec succès ! Toutes les autres demandes du client ont été annulées."}
+
+@router.get("/coaches/me/pending-requests")
+async def get_coach_pending_requests(
+    current_user_id: int,
+    session: AsyncSession = Depends(get_session)
+):
+    query = (
+        select(ClientCoachRequest, Users)
+        .join(Users, ClientCoachRequest.client_id == Users.id)
+        .where(
+            and_(
+                ClientCoachRequest.coach_id == current_user_id,
+                ClientCoachRequest.status == 'pending'
+            )
+        )
+    )
+    result = await session.execute(query)
+    rows = result.all()
+    
+    return [{
+        "request_id": req.id,
+        "client_id": client.id,
+        "client_name": f"{client.firstname} {client.lastname}",
+        "client_city": client.city,
+        "client_age": client.age,
+        "client_weight": client.weight,
+        "client_height": client.height,
+        "client_email": client.email,
+        "client_goal": client.goal,
+        "created_at": req.created_at
+    } for req, client in rows]
