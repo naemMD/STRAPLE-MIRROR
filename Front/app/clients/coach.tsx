@@ -128,7 +128,6 @@ const CoachScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Supprime le header du layout sans affecter le paddingTop manuel */}
       <Stack.Screen options={{ headerShown: false }} />
 
       {loading ? (
@@ -154,10 +153,22 @@ const CoachScreen = () => {
                         <Ionicons name="chevron-forward" size={24} color="#8A8D91" />
                     </TouchableOpacity>
 
+                    {/* Ligne d'actions avec Chat et Coach IA */}
                     <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.actionBtnPrimary} onPress={() => router.push({ pathname: "/chat/[id]", params: { id: myCoach.id, name: myCoach.firstname } })}>
+                        <TouchableOpacity 
+                            style={styles.actionBtnPrimary} 
+                            onPress={() => router.push({ pathname: "/chat/[id]", params: { id: myCoach.id, name: myCoach.firstname } })}
+                        >
                             <Ionicons name="chatbubble-ellipses" size={20} color="white" style={{marginRight: 8}} />
                             <Text style={styles.actionBtnText}>Chat</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={[styles.actionBtnPrimary, { backgroundColor: '#9b59b6' }]} 
+                            onPress={() => router.push('/clients/ai-coach')}
+                        >
+                            <Ionicons name="sparkles" size={20} color="white" style={{marginRight: 8}} />
+                            <Text style={styles.actionBtnText}>Coach IA</Text>
                         </TouchableOpacity>
                     </View>
                     
@@ -168,8 +179,7 @@ const CoachScreen = () => {
                 </>
             ) : (
                 <View style={styles.noCoachContainer}>
-                    
-                    {/* --- INVITATIONS RECUES --- */}
+                    {/* invitations et requêtes ici... */}
                     {invitations.length > 0 && (
                         <View style={styles.listSection}>
                             <Text style={styles.listHeader}>Received Invitations ({invitations.length})</Text>
@@ -193,7 +203,6 @@ const CoachScreen = () => {
                         </View>
                     )}
 
-                    {/* --- DEMANDES ENVOYÉES --- */}
                     {sentRequests.length > 0 && (
                         <View style={styles.listSection}>
                             <Text style={styles.listHeader}>Your Sent Requests ({sentRequests.length})</Text>
@@ -218,12 +227,19 @@ const CoachScreen = () => {
 
                     {(invitations.length > 0 || sentRequests.length > 0) && <View style={styles.separator} />}
 
-                    {/* --- FIND COACH / CODE UNIQUE --- */}
                     <View style={{alignItems: 'center', marginTop: 40}}>
+                        {/* Bouton Coach IA quand on n'a pas de coach physique */}
+                        <TouchableOpacity 
+                            style={[styles.searchButton, { backgroundColor: '#9b59b6', marginBottom: 15 }]} 
+                            onPress={() => router.push('/clients/ai-coach')}
+                        >
+                            <Ionicons name="sparkles" size={24} color="white" style={{marginRight: 10}}/>
+                            <Text style={styles.searchButtonText}>Talk to Coach IA</Text>
+                        </TouchableOpacity>
+
                         <Ionicons name="people-circle-outline" size={80} color="#3498DB" style={{marginBottom: 20}} />
                         <Text style={styles.noCoachTitle}>You don't have a coach yet</Text>
-                        <Text style={styles.noCoachText}>Find a coach near you, or share your unique code with your current coach.</Text>
-
+                        
                         <TouchableOpacity style={styles.searchButton} onPress={() => router.push('/clients/search-coach')}>
                             <Ionicons name="search" size={24} color="white" style={{marginRight: 10}}/>
                             <Text style={styles.searchButtonText}>Find a Coach</Text>
@@ -265,9 +281,8 @@ const styles = StyleSheet.create({
 
   noCoachContainer: { width: '100%' },
   noCoachTitle: { color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', paddingHorizontal: 20 },
-  noCoachText: { color: '#aaa', fontSize: 16, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 },
   
-  searchButton: { flexDirection: 'row', backgroundColor: '#3498DB', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 25, alignItems: 'center', marginBottom: 30, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
+  searchButton: { flexDirection: 'row', backgroundColor: '#3498DB', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 25, alignItems: 'center', marginBottom: 30, elevation: 5 },
   searchButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
 
   codeCard: { backgroundColor: '#2A4562', width: '90%', padding: 20, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#3498DB', marginBottom: 20, alignSelf: 'center' },
@@ -285,7 +300,8 @@ const styles = StyleSheet.create({
   coachCityText: { color: '#8A8D91', fontSize: 12, marginTop: 2 },
   viewProfileLink: { color: '#f1c40f', fontSize: 12, marginTop: 4, fontWeight: 'bold' },
   cancelBtn: { padding: 8, backgroundColor: 'rgba(231, 76, 60, 0.2)', borderRadius: 20 },
-  separator: { height: 1, backgroundColor: '#2A4562', width: '85%', alignSelf: 'center', marginBottom: 30 }
+  separator: { height: 1, backgroundColor: '#2A4562', width: '85%', alignSelf: 'center', marginBottom: 30 },
+  noCoachText: { color: '#aaa', fontSize: 16, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 },
 });
 
 export default CoachScreen;
