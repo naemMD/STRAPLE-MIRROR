@@ -31,10 +31,8 @@ const FoodImage = ({ uri, style, iconSize = 24 }: any) => {
 
 const goalLabels: { [key: string]: string } = {
   'lose_weight': '📉 Weight Loss',
-  'maintain_weight': '⚖️ Maintain',
   'gain_muscle': '💪 Muscle Gain',
-  'maintain': '⚖️ Maintain',
-  'get_stronger': '💪 Get Stronger'
+  'maintain': '⚖️ Maintain'
 };
 
 const ClientDetailsScreen = () => {

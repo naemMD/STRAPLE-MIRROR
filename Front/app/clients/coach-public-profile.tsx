@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router'; // 🔥 Stack importé ici
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
@@ -11,7 +11,7 @@ import { Toast } from 'react-native-toast-message/lib/src/Toast';
 const CoachPublicProfile = () => {
   const { coachId, invitationId } = useLocalSearchParams();
   const router = useRouter();
-  const insets = useSafeAreaInsets(); // 🔥 Pour gérer l'espacement du haut proprement
+  const insets = useSafeAreaInsets();
   const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
 
   const [coach, setCoach] = useState<any>(null);
@@ -21,15 +21,28 @@ const CoachPublicProfile = () => {
   const [sendingRequest, setSendingRequest] = useState(false);
   const [requestStatus, setRequestStatus] = useState<'none' | 'pending'>('none');
   const [pendingRequestId, setPendingRequestId] = useState<number | null>(null); 
+  
+  const [hasCoach, setHasCoach] = useState(false);
 
   useEffect(() => {
     fetchCoachProfileAndStatus();
   }, [coachId]);
 
   const fetchCoachProfileAndStatus = async () => {
+    // 🔥 Protection contre le chargement "fantôme" d'Expo Router
+    if (!coachId || coachId === 'undefined') {
+        setLoading(false);
+        return; 
+    }
+
     try {
       const token = await getToken();
       const user = await getUserDetails();
+
+      if (user?.id) {
+          const userRes = await axios.get(`${API_URL}/users/me/${user.id}`);
+          setHasCoach(!!userRes.data.coach_id);
+      }
 
       const response = await axios.get(`${API_URL}/coaches/${coachId}/public-profile`);
       setCoach(response.data);
@@ -102,6 +115,15 @@ const CoachPublicProfile = () => {
   };
 
   const handleRequestCoaching = async () => {
+    if (hasCoach) {
+        Alert.alert(
+            "Action Impossible",
+            "Vous avez déjà un coach. Vous devez d'abord vous désassigner de votre coach actuel dans votre profil avant d'envoyer une nouvelle demande.",
+            [{ text: "Compris", style: "default" }]
+        );
+        return;
+    }
+
     setSendingRequest(true);
     try {
         const token = await getToken();
@@ -162,8 +184,11 @@ const CoachPublicProfile = () => {
   if (loading) return <ActivityIndicator size="large" color="#3498DB" style={{ flex: 1, backgroundColor: '#1A1F2B' }} />;
 
   return (
-  <ScrollView style={styles.container}>
-    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+  <ScrollView style={[styles.container, { paddingTop: insets.top }]}>
+      {/* 🔥 SOLUTION : On masque le header global d'Expo Router */}
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Ionicons name="arrow-back" size={24} color="white" />
       </TouchableOpacity>
 
@@ -222,7 +247,6 @@ const CoachPublicProfile = () => {
           </TouchableOpacity>
         </View>
       ) : (
-        // 🔥 NOUVEAU DESIGN DU BOUTON (Pending + Poubelle)
         requestStatus === 'pending' ? (
             <View style={styles.pendingRow}>
                 <View style={styles.pendingBadge}>
@@ -235,7 +259,11 @@ const CoachPublicProfile = () => {
             </View>
         ) : (
             <TouchableOpacity 
-                style={[styles.requestButton, sendingRequest && { opacity: 0.7 }]} 
+                style={[
+                    styles.requestButton, 
+                    hasCoach ? { backgroundColor: '#2A4562' } : null,
+                    sendingRequest && { opacity: 0.7 }
+                ]} 
                 onPress={handleRequestCoaching}
                 disabled={sendingRequest}
             >
@@ -243,8 +271,10 @@ const CoachPublicProfile = () => {
                     <ActivityIndicator color="white" />
                 ) : (
                     <>
-                        <Ionicons name="paper-plane" size={20} color="white" style={{ marginRight: 10 }} />
-                        <Text style={styles.requestButtonText}>Request Coaching</Text>
+                        <Ionicons name={hasCoach ? "lock-closed" : "paper-plane"} size={20} color={hasCoach ? "#8A8D91" : "white"} style={{ marginRight: 10 }} />
+                        <Text style={[styles.requestButtonText, hasCoach && { color: '#8A8D91' }]}>
+                            {hasCoach ? "Already Assigned" : "Request Coaching"}
+                        </Text>
                     </>
                 )}
             </TouchableOpacity>
@@ -257,8 +287,8 @@ const CoachPublicProfile = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1A1F2B', paddingHorizontal: 20 }, // J'ai remplacé padding par paddingHorizontal pour bien gérer le haut avec insets
-  backButton: { marginBottom: 15, marginTop: 10 }, // Marge du haut corrigée
+  container: { flex: 1, backgroundColor: '#1A1F2B', paddingHorizontal: 20 },
+  backButton: { marginBottom: 15, marginTop: 10 },
   profileHeader: { alignItems: 'center', marginBottom: 30 },
   avatarLarge: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
   avatarText: { fontSize: 40, color: 'white', fontWeight: 'bold' },
@@ -283,7 +313,6 @@ const styles = StyleSheet.create({
   requestButton: { flexDirection: 'row', backgroundColor: '#3498DB', padding: 18, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 20, elevation: 3, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3, shadowOffset: { width: 0, height: 2 } },
   requestButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
 
-  // 🔥 Nouveaux styles pour la ligne "Pending + Cancel"
   pendingRow: { flexDirection: 'row', marginTop: 20, gap: 10 },
   pendingBadge: { flex: 1, flexDirection: 'row', backgroundColor: '#2A4562', padding: 18, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   pendingBadgeText: { color: '#8A8D91', fontWeight: 'bold', fontSize: 16 },

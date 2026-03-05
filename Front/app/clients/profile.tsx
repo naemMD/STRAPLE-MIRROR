@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import * as Clipboard from 'expo-clipboard'; // Utilise expo-clipboard si disponible
+import * as Clipboard from 'expo-clipboard';
 import { getUserDetails } from '@/services/authStorage';
 
 const ProfileScreen = () => {
@@ -46,8 +46,16 @@ const ProfileScreen = () => {
       }
   };
 
-  // Récupère la config correspondante ou une config par défaut
-  const currentGoal = user?.goal ? goalConfig[user.goal] : { label: 'Not specified', icon: 'help-circle', color: '#3498DB' };
+
+  // 🔥 2. On sécurise la clé (minuscules pour éviter les bugs de casse)
+  const userGoalKey = user?.goal ? String(user.goal).toLowerCase() : '';
+
+  // 🔥 3. On fait la correspondance, avec un texte de secours plus intelligent
+  const currentGoal = goalConfig[userGoalKey] || { 
+      label: user?.goal ? String(user.goal).replace('_', ' ') : 'Not specified', // Affiche la vraie valeur si pas trouvée
+      icon: 'help-circle', 
+      color: '#3498DB' 
+  };
 
   if (loading) {
     return (
@@ -58,7 +66,6 @@ const ProfileScreen = () => {
   }
 
   return (
-    // Suppression du padding top manuel ici car il vient du layout
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.headerCard}>
         <View style={styles.avatarLarge}>
@@ -107,11 +114,11 @@ const ProfileScreen = () => {
       <View style={styles.card}>
         <View style={styles.goalItem}>
             <View style={[styles.iconCircle, { backgroundColor: `${currentGoal.color}20` }]}>
-                <Ionicons name={currentGoal.icon} size={24} color={currentGoal.color} />
+                <Ionicons name={currentGoal.icon as any} size={24} color={currentGoal.color} />
             </View>
             <View style={{ marginLeft: 15 }}>
                 <Text style={styles.goalSub}>Primary objective</Text>
-                <Text style={[styles.goalText, { color: currentGoal.color }]}>
+                <Text style={[styles.goalText, { color: currentGoal.color, textTransform: 'capitalize' }]}>
                     {currentGoal.label}
                 </Text>
             </View>

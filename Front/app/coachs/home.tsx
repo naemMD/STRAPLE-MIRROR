@@ -28,8 +28,7 @@ export default function CoachHomepage() {
   const goalConfig: { [key: string]: { label: string; icon: any; color: string } } = {
     'lose_weight': { label: 'Lose Weight', icon: 'trending-down', color: '#E74C3C' },
     'gain_muscle': { label: 'Gain Muscle', icon: 'barbell', color: '#2ECC71' },
-    'maintain': { label: 'Maintain Weight', icon: 'git-commit', color: '#F1C40F' },
-    'get_stronger': { label: 'Get Stronger', icon: 'flash', color: '#9B59B6' },
+    'maintain': { label: 'Maintain Weight', icon: 'git-commit', color: '#F1C40F' }
   };
 
   const fetchData = async () => {
@@ -93,8 +92,11 @@ export default function CoachHomepage() {
     }
   };
 
-  // Récupère la config correspondante pour le client sélectionné ou une config par défaut
-  const currentClientGoal = selectedRequest?.client_goal ? goalConfig[selectedRequest.client_goal] : { label: 'Not specified', icon: 'help-circle', color: '#8A8D91' };
+    const currentClientGoal = goalConfig[selectedRequest?.client_goal] || { 
+        label: 'Not specified', 
+        icon: 'help-circle', 
+        color: '#8A8D91' 
+    };
 
   if (loading) {
     return (

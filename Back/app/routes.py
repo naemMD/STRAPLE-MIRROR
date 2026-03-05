@@ -1172,3 +1172,20 @@ async def get_coach_pending_requests(
         "client_goal": client.goal,
         "created_at": req.created_at
     } for req, client in rows]
+
+@router.delete("/coaches/clients/{client_id}", status_code=status.HTTP_200_OK)
+async def remove_client_from_coach(
+    client_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    result = await session.execute(select(Users).where(Users.id == client_id, Users.coach_id == current_user_id))
+    client = result.scalars().first()
+    
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found or not associated with this coach.")
+
+    client.coach_id = None
+    await session.commit()
+    
+    return {"message": "Client successfully removed from your team."}
