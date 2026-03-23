@@ -689,22 +689,23 @@ const ClientDetailsScreen = () => {
                     <TextInput style={styles.inputModal} placeholder="Meal Name (e.g. Lunch)" placeholderTextColor="#888" value={mealName} onChangeText={setMealName} />
                     
                     <Text style={styles.inputLabelModal}>Add Food (Enter Weight first!)</Text>
+                    <Text style={{color: '#8A8D91', fontSize: 11, fontStyle: 'italic', marginBottom: 6}}>Search in any language (e.g. "poulet", "chicken", "pollo")</Text>
                     <View style={styles.searchRow}>
-                        <TextInput 
-                            style={[styles.inputModal, {width: 80, textAlign:'center', marginBottom: 0}]} 
-                            placeholder="g" 
-                            keyboardType="numeric"  
-                            value={foodSearchWeight} 
-                            onChangeText={setFoodSearchWeight} 
+                        <TextInput
+                            style={[styles.inputModal, {width: 80, textAlign:'center', marginBottom: 0}]}
+                            placeholder="g"
+                            keyboardType="numeric"
+                            value={foodSearchWeight}
+                            onChangeText={setFoodSearchWeight}
                             placeholderTextColor="#888"
                         />
-                        <TextInput 
-                            style={[styles.inputModal, {flex: 1, marginLeft: 10, marginBottom: 0}]} 
-                            placeholder="Search food..." 
-                            placeholderTextColor="#888" 
-                            value={foodSearchQuery} 
-                            onChangeText={setFoodSearchQuery} 
-                            onSubmitEditing={searchFoodApi} 
+                        <TextInput
+                            style={[styles.inputModal, {flex: 1, marginLeft: 10, marginBottom: 0}]}
+                            placeholder="Search food..."
+                            placeholderTextColor="#888"
+                            value={foodSearchQuery}
+                            onChangeText={setFoodSearchQuery}
+                            onSubmitEditing={searchFoodApi}
                         />
                         <TouchableOpacity style={styles.searchBtn} onPress={searchFoodApi}>
                             {searchingFood ? <ActivityIndicator size="small" color="white"/> : <Ionicons name="search" size={20} color="white" />}

@@ -608,21 +608,22 @@ const HomeScreen = () => {
 
 
                 <Text style={styles.inputLabelModal}>Add Food (Enter Weight first!)</Text>
+                <Text style={{color: '#8A8D91', fontSize: 11, fontStyle: 'italic', marginBottom: 6}}>Search in any language (e.g. "poulet", "chicken", "pollo")</Text>
                 <View style={styles.searchRowNew}>
-                    <TextInput 
-                        style={[styles.inputModal, {width: 80, textAlign:'center', marginBottom: 0}]} 
-                        placeholder="g" 
-                        keyboardType="numeric"  
-                        value={searchWeight} 
-                        onChangeText={setSearchWeight} 
+                    <TextInput
+                        style={[styles.inputModal, {width: 80, textAlign:'center', marginBottom: 0}]}
+                        placeholder="g"
+                        keyboardType="numeric"
+                        value={searchWeight}
+                        onChangeText={setSearchWeight}
                         placeholderTextColor="#888"
                     />
-                    <TextInput 
-                        style={[styles.inputModal, {flex: 1, marginLeft: 10, marginBottom: 0}]} 
-                        placeholder="Search food..." 
-                        placeholderTextColor="#888" 
-                        value={search} 
-                        onChangeText={setSearch} 
+                    <TextInput
+                        style={[styles.inputModal, {flex: 1, marginLeft: 10, marginBottom: 0}]}
+                        placeholder="Search food..."
+                        placeholderTextColor="#888"
+                        value={search}
+                        onChangeText={setSearch}
                         onSubmitEditing={searchFood}
                     />
                     <TouchableOpacity style={styles.searchBtnNew} onPress={searchFood}>

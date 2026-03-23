@@ -15,3 +15,4 @@ apscheduler==3.10.4
 asyncpg==0.28.0
 uvicorn
 gunicorn
+openai>=1.0.0

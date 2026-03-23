@@ -145,6 +145,10 @@ const CoachScreen = () => {
                             <Ionicons name="chatbubble-ellipses" size={20} color="white" style={{marginRight: 8}} />
                             <Text style={styles.actionBtnText}>Chat</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionBtnAI} onPress={() => router.push('/chat/ai-coach')}>
+                            <Ionicons name="sparkles" size={20} color="white" style={{marginRight: 8}} />
+                            <Text style={styles.actionBtnText}>Coach IA</Text>
+                        </TouchableOpacity>
                     </View>
                     
                     <TouchableOpacity style={styles.unassignButton} onPress={handleChangeCoach}>
@@ -205,6 +209,17 @@ const CoachScreen = () => {
                     {(invitations.length > 0 || sentRequests.length > 0) && <View style={styles.separator} />}
 
                     {/* --- FIND COACH / CODE UNIQUE --- */}
+                    <TouchableOpacity style={styles.aiCoachBanner} onPress={() => router.push('/chat/ai-coach')}>
+                        <View style={styles.aiCoachBannerIcon}>
+                            <Ionicons name="sparkles" size={28} color="#F39C12" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.aiCoachBannerTitle}>AI Coach available</Text>
+                            <Text style={styles.aiCoachBannerText}>Ask nutrition & fitness questions while you find your coach</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={24} color="#F39C12" />
+                    </TouchableOpacity>
+
                     <Ionicons name="people-circle-outline" size={80} color="#3498DB" style={{marginBottom: 20}} />
                     <Text style={styles.noCoachTitle}>You don't have a coach yet</Text>
                     <Text style={styles.noCoachText}>Find a coach near you, or share your unique code with your current coach.</Text>
@@ -242,6 +257,7 @@ const styles = StyleSheet.create({
   
   actionRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, marginBottom: 30 },
   actionBtnPrimary: { flex: 1, backgroundColor: '#3498DB', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  actionBtnAI: { flex: 1, backgroundColor: '#F39C12', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   actionBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   
   unassignButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 15, marginHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(231, 76, 60, 0.1)' },
@@ -269,7 +285,12 @@ const styles = StyleSheet.create({
   coachCityText: { color: '#8A8D91', fontSize: 12, marginTop: 2 },
   viewProfileLink: { color: '#f1c40f', fontSize: 12, marginTop: 4, fontWeight: 'bold' },
   cancelBtn: { padding: 8, backgroundColor: 'rgba(231, 76, 60, 0.2)', borderRadius: 20 },
-  separator: { height: 1, backgroundColor: '#2A4562', width: '85%', alignSelf: 'center', marginBottom: 30 }
+  separator: { height: 1, backgroundColor: '#2A4562', width: '85%', alignSelf: 'center', marginBottom: 30 },
+
+  aiCoachBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#232D3F', borderRadius: 16, padding: 16, width: '90%', marginBottom: 30, borderWidth: 1, borderColor: 'rgba(243, 156, 18, 0.3)' },
+  aiCoachBannerIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(243, 156, 18, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  aiCoachBannerTitle: { color: '#F39C12', fontWeight: 'bold', fontSize: 16, marginBottom: 2 },
+  aiCoachBannerText: { color: '#8A8D91', fontSize: 12 },
 });
 
 export default CoachScreen;

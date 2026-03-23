@@ -5,10 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.model import *
 from app.database import get_session
 from app.api import *
-from app.schemas import WorkoutCreate, WorkoutRead, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate
+from app.schemas import WorkoutCreate, WorkoutRead, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage
 from typing import List, Any, Optional
 from jose import JWTError, jwt
 from dotenv import load_dotenv
+from sqlalchemy import select, desc
+from app.ai_coach import generate_ai_response
 import os
 
 router = APIRouter()
@@ -654,3 +656,99 @@ async def get_user_public_profile_route(
     session: AsyncSession = Depends(get_session)
 ):
     return await get_user_public_profile(session, user_id)
+
+
+# ---------------------------------------------------------------------------
+# AI Coach
+# ---------------------------------------------------------------------------
+
+@router.post("/ai-coach/chat", response_model=AIChatResponse)
+async def ai_coach_chat_route(
+    chat_request: AIChatRequest,
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Send a message to the AI coach and get a response."""
+    from app.schemas import Users
+
+    # Fetch user profile for context
+    user = await session.get(Users, current_user_id)
+    user_context = None
+    if user:
+        user_context = {
+            "firstname": user.firstname,
+            "goal": user.goal,
+            "weight": user.weight,
+            "height": user.height,
+            "daily_caloric_needs": user.daily_caloric_needs,
+        }
+
+    # Load recent conversation history from DB
+    result = await session.execute(
+        select(AIChatMessage)
+        .where(AIChatMessage.user_id == current_user_id)
+        .order_by(desc(AIChatMessage.created_at))
+        .limit(20)
+    )
+    history_rows = result.scalars().all()
+    conversation_history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in reversed(history_rows)
+    ]
+
+    # Generate AI response
+    ai_response = await generate_ai_response(
+        user_message=chat_request.message,
+        conversation_history=conversation_history,
+        user_context=user_context,
+    )
+
+    # Save user message
+    user_msg = AIChatMessage(
+        user_id=current_user_id,
+        role="user",
+        content=chat_request.message,
+    )
+    session.add(user_msg)
+
+    # Save AI response
+    ai_msg = AIChatMessage(
+        user_id=current_user_id,
+        role="assistant",
+        content=ai_response,
+    )
+    session.add(ai_msg)
+    await session.commit()
+    await session.refresh(ai_msg)
+
+    return AIChatResponse(response=ai_response, message_id=ai_msg.id)
+
+
+@router.get("/ai-coach/history", response_model=List[AIChatMessageRead])
+async def ai_coach_history_route(
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Fetch the AI coach conversation history for the current user."""
+    result = await session.execute(
+        select(AIChatMessage)
+        .where(AIChatMessage.user_id == current_user_id)
+        .order_by(AIChatMessage.created_at)
+    )
+    return result.scalars().all()
+
+
+@router.delete("/ai-coach/history")
+async def ai_coach_clear_history_route(
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Clear the AI coach conversation history for the current user."""
+    result = await session.execute(
+        select(AIChatMessage).where(AIChatMessage.user_id == current_user_id)
+    )
+    messages = result.scalars().all()
+    for msg in messages:
+        await session.delete(msg)
+    await session.commit()
+    return {"detail": "Conversation history cleared"}
