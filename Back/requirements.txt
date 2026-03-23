@@ -14,3 +14,5 @@ cryptography
 pydantic[email]==2.10.6
 apscheduler==3.10.4
 asyncpg==0.28.0
+uvicorn
+gunicorn
