@@ -6,7 +6,7 @@ Configure via environment variables:
   - AI_MODEL_PROVIDER: "scaleway"
   - AI_MODEL_NAME: "mistral-small-3.2-24b-instruct-2506"
   - MISTRAL_API_KEY: Your Scaleway Secret Key
-  - AI_API_BASE_URL: "https://api.scaleway.ai/65a7dd3f-2376-4856-8e6f-8162c28d6f9a/v1"
+  - SCALEWAY_API_URL: "https://api.scaleway.ai/65a7dd3f-2376-4856-8e6f-8162c28d6f9a/v1"
 """
 
 import os
@@ -72,10 +72,10 @@ When a user mentions pain, injury, discomfort, or any physical issue, you MUST f
    - Whether there is swelling, bruising, or visible deformation
    - Whether the pain gets worse with specific movements
 
-2. **Provide a probability-based assessment** — Once you have enough information, present your assessment as a list of possible conditions with estimated probability percentages. Format example:
-   - 70% — Muscle strain (grade I) of the [muscle name]
-   - 20% — Tendinitis of the [tendon]
-   - 10% — Minor ligament sprain
+2. **Provide a hypothesis-based assessment** — Once you have enough information, present your assessment as a structured list of hypotheses rather than invented percentages. Format example:
+   - **Primary Hypothesis:** Muscle strain (grade I) of the [muscle name]
+   - **Alternative Hypothesis:** Tendinitis of the [tendon]
+   - **Point of Vigilance:** Minor ligament sprain (requires careful monitoring)
 
 3. **For each possibility**, briefly explain why you think so based on what the user told you.
 
@@ -127,9 +127,9 @@ async def generate_ai_response(
                 "content": "User profile:\n" + "\n".join(context_parts),
             })
 
-    # Add conversation history (last 20 messages max to stay within context)
+    # Add conversation history (last 10 messages max to stay within context and control costs)
     if conversation_history:
-        messages.extend(conversation_history[-20:])
+        messages.extend(conversation_history[-10:])
 
     messages.append({"role": "user", "content": user_message})
 
@@ -138,7 +138,7 @@ async def generate_ai_response(
             model=AI_MODEL_NAME,
             messages=messages,
             max_tokens=2048,
-            temperature=0.7,
+            temperature=0.3, # Lowered from 0.7 to ensure factual medical/fitness safety
             top_p=1,
             presence_penalty=0
         )
