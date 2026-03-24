@@ -238,7 +238,7 @@ const SignupPage = () => {
       style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.back()}>
             <Ionicons name="arrow-back" size={28} color="#3498DB" />

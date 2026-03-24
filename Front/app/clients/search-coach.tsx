@@ -143,6 +143,7 @@ export default function SearchCoachScreen() {
       ) : (
         <FlatList
           data={coaches}
+          keyboardDismissMode="on-drag"
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderCoach}
           contentContainerStyle={{ padding: 16 }}

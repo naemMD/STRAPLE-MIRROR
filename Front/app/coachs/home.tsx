@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Dimensions, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -104,8 +104,9 @@ export default function CoachHomepage() {
           <Text style={styles.subtitle}>Here is your daily overview</Text>
       </View>
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
         showsVerticalScrollIndicator={false}
       >
@@ -228,8 +229,8 @@ export default function CoachHomepage() {
 
       {/* --- CLIENT PROFILE PREVIEW MODAL --- */}
       <Modal visible={isModalVisible} animationType="slide" transparent onRequestClose={() => setIsModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
+          <Pressable style={styles.modalOverlay} onPress={() => setIsModalVisible(false)}>
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
                   {selectedRequest && (
                       <>
                           <View style={styles.modalHeaderInfo}>
@@ -302,8 +303,8 @@ export default function CoachHomepage() {
                           </TouchableOpacity>
                       </>
                   )}
-              </View>
-          </View>
+              </Pressable>
+          </Pressable>
       </Modal>
     </View>
   );

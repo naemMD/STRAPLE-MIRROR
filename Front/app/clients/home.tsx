@@ -555,7 +555,7 @@ const HomeScreen = () => {
           <Text style={styles.catalogueTitle}>Today's Meals</Text>
       </View>
 
-      <ScrollView style={styles.mealsContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.mealsContainer} showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag">
         {myMeals.length === 0 && <Text style={{color: 'gray', textAlign: 'center', marginTop: 20}}>No meals added yet.</Text>}
         {myMeals.map((meal, index) => (
             <MealCard key={index} meal={meal} onToggleEat={handleToggleEat} onView={handleView} onEdit={handleEdit}/>

@@ -5,12 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.model import *
 from app.database import get_session
 from app.api import *
-from app.schemas import WorkoutCreate, WorkoutRead, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage
+from app.schemas import WorkoutCreate, WorkoutRead, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage, AI_DAILY_MESSAGE_LIMIT
 from typing import List, Any, Optional
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func as sa_func
 from app.ai_coach import generate_ai_response
+from datetime import date
 import os
 
 router = APIRouter()
@@ -670,58 +671,104 @@ async def ai_coach_chat_route(
 ):
     """Send a message to the AI coach and get a response."""
     from app.schemas import Users
+    import traceback
 
-    # Fetch user profile for context
-    user = await session.get(Users, current_user_id)
-    user_context = None
-    if user:
-        user_context = {
-            "firstname": user.firstname,
-            "goal": user.goal,
-            "weight": user.weight,
-            "height": user.height,
-            "daily_caloric_needs": user.daily_caloric_needs,
-        }
+    try:
+        # Check daily message limit
+        today_start = date.today()
+        count_result = await session.execute(
+            select(sa_func.count(AIChatMessage.id))
+            .where(
+                AIChatMessage.user_id == current_user_id,
+                AIChatMessage.role == "user",
+                sa_func.date(AIChatMessage.created_at) == today_start,
+            )
+        )
+        daily_count = count_result.scalar() or 0
 
-    # Load recent conversation history from DB
-    result = await session.execute(
-        select(AIChatMessage)
-        .where(AIChatMessage.user_id == current_user_id)
-        .order_by(desc(AIChatMessage.created_at))
-        .limit(20)
+        if daily_count >= AI_DAILY_MESSAGE_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily limit reached ({AI_DAILY_MESSAGE_LIMIT} messages/day). Try again tomorrow!"
+            )
+
+        # Fetch user profile for context
+        user = await session.get(Users, current_user_id)
+        user_context = None
+        if user:
+            user_context = {
+                "firstname": user.firstname,
+                "goal": user.goal,
+                "weight": user.weight,
+                "height": user.height,
+                "daily_caloric_needs": user.daily_caloric_needs,
+            }
+
+        # Load recent conversation history from DB
+        result = await session.execute(
+            select(AIChatMessage)
+            .where(AIChatMessage.user_id == current_user_id)
+            .order_by(desc(AIChatMessage.created_at))
+            .limit(20)
+        )
+        history_rows = result.scalars().all()
+        conversation_history = [
+            {"role": msg.role, "content": msg.content}
+            for msg in reversed(history_rows)
+        ]
+
+        # Generate AI response
+        ai_response = await generate_ai_response(
+            user_message=chat_request.message,
+            conversation_history=conversation_history,
+            user_context=user_context,
+        )
+
+        # Save user message
+        user_msg = AIChatMessage(
+            user_id=current_user_id,
+            role="user",
+            content=chat_request.message,
+        )
+        session.add(user_msg)
+
+        # Save AI response
+        ai_msg = AIChatMessage(
+            user_id=current_user_id,
+            role="assistant",
+            content=ai_response,
+        )
+        session.add(ai_msg)
+        await session.commit()
+        await session.refresh(ai_msg)
+
+        remaining = AI_DAILY_MESSAGE_LIMIT - daily_count - 1
+        return AIChatResponse(response=ai_response, message_id=ai_msg.id, remaining_messages=remaining)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"AI Coach error: {str(e)}")
+
+
+@router.get("/ai-coach/remaining")
+async def ai_coach_remaining_route(
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Get the number of remaining AI coach messages for today."""
+    today_start = date.today()
+    count_result = await session.execute(
+        select(sa_func.count(AIChatMessage.id))
+        .where(
+            AIChatMessage.user_id == current_user_id,
+            AIChatMessage.role == "user",
+            sa_func.date(AIChatMessage.created_at) == today_start,
+        )
     )
-    history_rows = result.scalars().all()
-    conversation_history = [
-        {"role": msg.role, "content": msg.content}
-        for msg in reversed(history_rows)
-    ]
-
-    # Generate AI response
-    ai_response = await generate_ai_response(
-        user_message=chat_request.message,
-        conversation_history=conversation_history,
-        user_context=user_context,
-    )
-
-    # Save user message
-    user_msg = AIChatMessage(
-        user_id=current_user_id,
-        role="user",
-        content=chat_request.message,
-    )
-    session.add(user_msg)
-
-    # Save AI response
-    ai_msg = AIChatMessage(
-        user_id=current_user_id,
-        role="assistant",
-        content=ai_response,
-    )
-    session.add(ai_msg)
-    await session.commit()
-    await session.refresh(ai_msg)
-
-    return AIChatResponse(response=ai_response, message_id=ai_msg.id)
+    daily_count = count_result.scalar() or 0
+    return {"remaining": max(0, AI_DAILY_MESSAGE_LIMIT - daily_count), "limit": AI_DAILY_MESSAGE_LIMIT}
 
 
 @router.get("/ai-coach/history", response_model=List[AIChatMessageRead])

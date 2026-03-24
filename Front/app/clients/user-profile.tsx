@@ -45,7 +45,7 @@ const UserPublicProfile = () => {
   }
 
   return (
-    <ScrollView style={[styles.container, { paddingTop: insets.top }]}>
+    <ScrollView style={[styles.container, { paddingTop: insets.top }]} keyboardDismissMode="on-drag">
       <Stack.Screen options={{ headerShown: false }} />
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

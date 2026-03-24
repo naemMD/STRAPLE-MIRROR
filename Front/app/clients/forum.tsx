@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput,
-  Modal, KeyboardAvoidingView, Platform, ActivityIndicator, FlatList,
+  Modal, KeyboardAvoidingView, Platform, ActivityIndicator, FlatList, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -280,6 +280,7 @@ const ForumScreen = () => {
           ref={scrollRef}
           style={styles.messageList}
           contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
+          keyboardDismissMode="on-drag"
         >
           {(!currentForum.messages || currentForum.messages.length === 0) && (
             <Text style={styles.emptyMessages}>No messages yet. Be the first!</Text>
@@ -366,6 +367,7 @@ const ForumScreen = () => {
       ) : (
         <FlatList
           data={forums}
+          keyboardDismissMode="on-drag"
           keyExtractor={item => String(item.id)}
           contentContainerStyle={{ padding: 16 }}
           ListEmptyComponent={
@@ -467,8 +469,9 @@ const ForumScreen = () => {
 
       {/* Create modal */}
       <Modal visible={showCreateModal} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalCard}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCreateModal(false)}>
+        <KeyboardAvoidingView style={{width: '100%'}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Create a Forum</Text>
 
             <Text style={styles.inputLabel}>Title <Text style={styles.charCount}>({newTitle.length}/80)</Text></Text>
@@ -519,14 +522,16 @@ const ForumScreen = () => {
                   : <Text style={styles.modalConfirmText}>Create</Text>}
               </TouchableOpacity>
             </View>
-          </View>
+          </Pressable>
         </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
 
       {/* Edit modal */}
       <Modal visible={showEditModal} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalCard}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowEditModal(false)}>
+        <KeyboardAvoidingView style={{width: '100%'}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Edit Forum</Text>
 
             <Text style={styles.inputLabel}>Title <Text style={styles.charCount}>({editTitle.length}/80)</Text></Text>
@@ -575,8 +580,9 @@ const ForumScreen = () => {
                   : <Text style={styles.modalConfirmText}>Save</Text>}
               </TouchableOpacity>
             </View>
-          </View>
+          </Pressable>
         </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
     </View>
   );

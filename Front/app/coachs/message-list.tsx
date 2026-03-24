@@ -60,6 +60,7 @@ const MessagesListScreen = () => {
       ) : (
         <FlatList
           data={conversations}
+          keyboardDismissMode="on-drag"
           keyExtractor={(item) => item.client_id.toString()}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16 }}

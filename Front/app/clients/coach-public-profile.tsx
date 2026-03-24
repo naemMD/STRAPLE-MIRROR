@@ -168,7 +168,7 @@ const CoachPublicProfile = () => {
   if (loading) return <ActivityIndicator size="large" color="#3498DB" style={{ flex: 1, backgroundColor: '#1A1F2B' }} />;
 
   return (
-  <ScrollView style={[styles.container, { paddingTop: insets.top }]}>
+  <ScrollView style={[styles.container, { paddingTop: insets.top }]} keyboardDismissMode="on-drag">
       {/* 🔥 SOLUTION : On masque le header global d'Expo Router */}
       <Stack.Screen options={{ headerShown: false }} />
 

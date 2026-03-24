@@ -192,6 +192,7 @@ export default function ProgrammeJour() {
         ) : (
           <FlatList
             data={exercices}
+            keyboardDismissMode="on-drag"
             keyExtractor={(item) => item._id}
             renderItem={({ item }) => (
               <View style={styles.exerciseItem}>

@@ -243,6 +243,7 @@ const TrainingDashboard = () => {
             ) : (
                 <FlatList
                     data={dailyWorkouts}
+                    keyboardDismissMode="on-drag"
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={renderWorkoutItem}
                     contentContainerStyle={{ paddingBottom: 200 }}

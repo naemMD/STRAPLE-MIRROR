@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getUserDetails } from '@/services/authStorage';
@@ -8,19 +8,38 @@ import { copyToClipboard } from '@/services/crossClipboard';
 import { crossAlert } from '@/services/crossAlert';
 import { Toast } from 'react-native-toast-message/lib/src/Toast';
 
+let SecureStore: any = null;
+if (Platform.OS !== 'web') {
+  SecureStore = require('expo-secure-store');
+}
+const storageGet = async (key: string) => {
+  if (Platform.OS === 'web') return localStorage.getItem(key);
+  return await SecureStore.getItemAsync(key);
+};
+
 const CoachScreen = () => {
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);
   const [myCoach, setMyCoach] = useState<any>(null);
   const [invitations, setInvitations] = useState<any[]>([]);
-  const [sentRequests, setSentRequests] = useState<any[]>([]); 
+  const [sentRequests, setSentRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aiCoachName, setAiCoachName] = useState('AI Coach');
+  const [aiCoachColor, setAiCoachColor] = useState('#F39C12');
 
   const loadData = async () => {
     try {
       setLoading(true);
       const session = await getUserDetails();
+
+      // Load AI coach preferences
+      try {
+        const savedName = await storageGet('ai_coach_name');
+        const savedColor = await storageGet('ai_coach_color');
+        if (savedName) setAiCoachName(savedName);
+        if (savedColor) setAiCoachColor(savedColor);
+      } catch (e) {}
 
       if (session?.id) {
          const userRes = await api.get(`/users/me/${session.id}`);
@@ -79,8 +98,8 @@ const CoachScreen = () => {
                   onPress: async () => {
                       try {
                           await api.delete(`/users/me/coach`);
-                          setMyCoach(null); 
-                          loadData(); 
+                          setMyCoach(null);
+                          loadData();
                       } catch (error) {
                           crossAlert("Error", "Failed to leave coach.");
                       }
@@ -96,15 +115,15 @@ const CoachScreen = () => {
       "Are you sure you want to cancel your request to this coach?",
       [
         { text: "No", style: "cancel" },
-        { 
-          text: "Yes, Cancel", 
-          style: "destructive", 
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
           onPress: async () => {
             try {
               const session = await getUserDetails();
               await api.delete(`/clients/requests/${requestId}?current_user_id=${session?.id}`);
               Toast.show({ type: 'success', text1: 'Request cancelled' });
-              loadData(); 
+              loadData();
             } catch (error) {
               Toast.show({ type: 'error', text1: 'Error cancelling request' });
             }
@@ -115,16 +134,15 @@ const CoachScreen = () => {
   };
 
   return (
-    // 🔥 C'est ici qu'était le problème ! On a supprimé le paddingTop: insets.top
     <View style={styles.container}>
       {loading ? (
         <ActivityIndicator size="large" color="#3498DB" style={{marginTop: 50}} />
       ) : (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} keyboardDismissMode="on-drag">
             {myCoach ? (
                 <>
                     <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Your Coach</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.activeCoachCard}
                         onPress={() => router.push({ pathname: "/clients/coach-public-profile", params: { coachId: myCoach.id }})}
                     >
@@ -145,12 +163,12 @@ const CoachScreen = () => {
                             <Ionicons name="chatbubble-ellipses" size={20} color="white" style={{marginRight: 8}} />
                             <Text style={styles.actionBtnText}>Chat</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionBtnAI} onPress={() => router.push('/chat/ai-coach')}>
+                        <TouchableOpacity style={[styles.actionBtnAI, { backgroundColor: aiCoachColor }]} onPress={() => router.push('/chat/ai-coach')}>
                             <Ionicons name="sparkles" size={20} color="white" style={{marginRight: 8}} />
-                            <Text style={styles.actionBtnText}>Coach IA</Text>
+                            <Text style={styles.actionBtnText}>{aiCoachName}</Text>
                         </TouchableOpacity>
                     </View>
-                    
+
                     <TouchableOpacity style={styles.unassignButton} onPress={handleChangeCoach}>
                         <Ionicons name="exit-outline" size={18} color="#e74c3c" style={{marginRight: 8}} />
                         <Text style={styles.unassignText}>Unassign Coach</Text>
@@ -158,7 +176,19 @@ const CoachScreen = () => {
                 </>
             ) : (
                 <View style={styles.noCoachContainer}>
-                    
+
+                    {/* --- AI COACH BANNER --- */}
+                    <TouchableOpacity style={[styles.aiCoachBanner, { borderColor: aiCoachColor + '4D' }]} onPress={() => router.push('/chat/ai-coach')}>
+                        <View style={[styles.aiCoachBannerIcon, { backgroundColor: aiCoachColor + '26' }]}>
+                            <Ionicons name="sparkles" size={28} color={aiCoachColor} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.aiCoachBannerTitle, { color: aiCoachColor }]}>Chat with {aiCoachName}</Text>
+                            <Text style={styles.aiCoachBannerText}>Get instant nutrition & fitness advice</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={24} color={aiCoachColor} />
+                    </TouchableOpacity>
+
                     {/* --- INVITATIONS RECUES --- */}
                     {invitations.length > 0 && (
                         <View style={styles.listSection}>
@@ -206,38 +236,28 @@ const CoachScreen = () => {
                         </View>
                     )}
 
-                    {(invitations.length > 0 || sentRequests.length > 0) && <View style={styles.separator} />}
+                    {/* --- FIND A COACH SECTION --- */}
+                    <View style={styles.findCoachSection}>
+                        <Text style={styles.findCoachTitle}>Find a human coach</Text>
+                        <Text style={styles.findCoachText}>Search nearby coaches or share your code so they can add you.</Text>
 
-                    {/* --- FIND COACH / CODE UNIQUE --- */}
-                    <TouchableOpacity style={styles.aiCoachBanner} onPress={() => router.push('/chat/ai-coach')}>
-                        <View style={styles.aiCoachBannerIcon}>
-                            <Ionicons name="sparkles" size={28} color="#F39C12" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.aiCoachBannerTitle}>AI Coach available</Text>
-                            <Text style={styles.aiCoachBannerText}>Ask nutrition & fitness questions while you find your coach</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={24} color="#F39C12" />
-                    </TouchableOpacity>
-
-                    <Ionicons name="people-circle-outline" size={80} color="#3498DB" style={{marginBottom: 20}} />
-                    <Text style={styles.noCoachTitle}>You don't have a coach yet</Text>
-                    <Text style={styles.noCoachText}>Find a coach near you, or share your unique code with your current coach.</Text>
-
-                    <TouchableOpacity style={styles.searchButton} onPress={() => router.push('/clients/search-coach')}>
-                        <Ionicons name="search" size={24} color="white" style={{marginRight: 10}}/>
-                        <Text style={styles.searchButtonText}>Find a Coach</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.codeCard}>
-                        <Text style={styles.codeLabel}>YOUR UNIQUE CODE</Text>
-                        <Text style={styles.codeValue}>{user?.unique_code || "Loading..."}</Text>
+                        <TouchableOpacity style={styles.searchButton} onPress={() => router.push('/clients/search-coach')}>
+                            <Ionicons name="search" size={20} color="white" style={{marginRight: 10}}/>
+                            <Text style={styles.searchButtonText}>Find a Coach</Text>
+                        </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity style={styles.copyButton} onPress={handleCopyCode}>
-                        <Ionicons name="copy-outline" size={20} color="white" style={{marginRight: 10}}/>
-                        <Text style={styles.copyButtonText}>Copy to clipboard</Text>
-                    </TouchableOpacity>
+                    {/* --- UNIQUE CODE --- */}
+                    <View style={styles.codeSection}>
+                        <Text style={styles.codeSectionTitle}>Your invite code</Text>
+                        <Text style={styles.codeSectionText}>Share this with your coach so they can add you</Text>
+                        <View style={styles.codeCard}>
+                            <Text style={styles.codeValue}>{user?.unique_code || "..."}</Text>
+                            <TouchableOpacity style={styles.copyBtn} onPress={handleCopyCode}>
+                                <Ionicons name="copy-outline" size={18} color="#3498DB" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 </View>
             )}
           </ScrollView>
@@ -254,30 +274,26 @@ const styles = StyleSheet.create({
   avatarText: { color: 'white', fontWeight: 'bold', fontSize: 22 },
   coachInfo: { flex: 1, marginLeft: 16 },
   coachName: { color: 'white', fontWeight: 'bold', fontSize: 18, marginBottom: 4 },
-  
+
   actionRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, marginBottom: 30 },
   actionBtnPrimary: { flex: 1, backgroundColor: '#3498DB', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  actionBtnAI: { flex: 1, backgroundColor: '#F39C12', paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  actionBtnAI: { flex: 1, paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   actionBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  
+
   unassignButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 15, marginHorizontal: 16, borderRadius: 12, backgroundColor: 'rgba(231, 76, 60, 0.1)' },
   unassignText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 16 },
 
-  noCoachContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 20 },
-  noCoachTitle: { color: 'white', fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', paddingHorizontal: 20 },
-  noCoachText: { color: '#aaa', fontSize: 16, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 },
-  
-  searchButton: { flexDirection: 'row', backgroundColor: '#3498DB', paddingHorizontal: 25, paddingVertical: 15, borderRadius: 25, alignItems: 'center', marginBottom: 30, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
-  searchButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+  noCoachContainer: { alignItems: 'center', paddingTop: 20, paddingHorizontal: 16 },
 
-  codeCard: { backgroundColor: '#2A4562', width: '90%', padding: 20, borderRadius: 15, alignItems: 'center', borderWidth: 1, borderColor: '#3498DB', marginBottom: 20 },
-  codeLabel: { color: '#aaa', fontSize: 12, letterSpacing: 1, marginBottom: 5 },
-  codeValue: { color: '#fff', fontSize: 32, fontWeight: 'bold', letterSpacing: 2 },
-  copyButton: { flexDirection: 'row', backgroundColor: '#1E2C3D', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, alignItems: 'center', marginBottom: 30, borderWidth: 1, borderColor: '#3498DB' },
-  copyButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  
-  listSection: { width: '100%', marginBottom: 30, paddingLeft: 16 },
-  listHeader: { color: '#8A8D91', fontSize: 14, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  // AI Coach banner
+  aiCoachBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#232D3F', borderRadius: 16, padding: 16, width: '100%', marginBottom: 24, borderWidth: 1 },
+  aiCoachBannerIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  aiCoachBannerTitle: { fontWeight: 'bold', fontSize: 16, marginBottom: 2 },
+  aiCoachBannerText: { color: '#8A8D91', fontSize: 12 },
+
+  // Invitations / requests
+  listSection: { width: '100%', marginBottom: 24 },
+  listHeader: { color: '#8A8D91', fontSize: 12, fontWeight: 'bold', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 },
   cardHorizontal: { backgroundColor: '#232D3F', borderRadius: 16, padding: 15, borderLeftWidth: 4, borderLeftColor: '#f1c40f', flexDirection: 'row', alignItems: 'center', width: 280, marginRight: 15, elevation: 3 },
   miniAvatar: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   miniAvatarText: { color: 'white', fontWeight: 'bold', fontSize: 20 },
@@ -285,12 +301,21 @@ const styles = StyleSheet.create({
   coachCityText: { color: '#8A8D91', fontSize: 12, marginTop: 2 },
   viewProfileLink: { color: '#f1c40f', fontSize: 12, marginTop: 4, fontWeight: 'bold' },
   cancelBtn: { padding: 8, backgroundColor: 'rgba(231, 76, 60, 0.2)', borderRadius: 20 },
-  separator: { height: 1, backgroundColor: '#2A4562', width: '85%', alignSelf: 'center', marginBottom: 30 },
 
-  aiCoachBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#232D3F', borderRadius: 16, padding: 16, width: '90%', marginBottom: 30, borderWidth: 1, borderColor: 'rgba(243, 156, 18, 0.3)' },
-  aiCoachBannerIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(243, 156, 18, 0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
-  aiCoachBannerTitle: { color: '#F39C12', fontWeight: 'bold', fontSize: 16, marginBottom: 2 },
-  aiCoachBannerText: { color: '#8A8D91', fontSize: 12 },
+  // Find coach section
+  findCoachSection: { width: '100%', backgroundColor: '#232D3F', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 16 },
+  findCoachTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 6 },
+  findCoachText: { color: '#8A8D91', fontSize: 13, textAlign: 'center', marginBottom: 16 },
+  searchButton: { flexDirection: 'row', backgroundColor: '#3498DB', paddingHorizontal: 24, paddingVertical: 13, borderRadius: 12, alignItems: 'center' },
+  searchButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+
+  // Code section
+  codeSection: { width: '100%', backgroundColor: '#232D3F', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 16 },
+  codeSectionTitle: { color: 'white', fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  codeSectionText: { color: '#8A8D91', fontSize: 13, textAlign: 'center', marginBottom: 14 },
+  codeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1F2B', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20, borderWidth: 1, borderColor: '#2A4562' },
+  codeValue: { color: '#fff', fontSize: 24, fontWeight: 'bold', letterSpacing: 3, marginRight: 12 },
+  copyBtn: { padding: 8, backgroundColor: 'rgba(52, 152, 219, 0.15)', borderRadius: 8 },
 });
 
 export default CoachScreen;

@@ -39,7 +39,7 @@ const SettingsScreen = () => {
   );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag">
       <Text style={styles.mainTitle}>App Settings</Text>
 
       <Text style={styles.sectionLabel}>ACCOUNT & SECURITY</Text>

@@ -90,33 +90,21 @@ const LoginPage = () => {
     }
   };
 
-  const testServerConnection = async () => {
-    try {
-      const response = await fetch(`${API_URL}/`);
-      const data = await response.json();
-      crossAlert('Server Connection', `Server responded: ${JSON.stringify(data)}`);
-    } catch (err) {
-      crossAlert('Connection Error', `Could not connect to server: ${err.message}`);
-    }
-  };
-
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardDismissMode="on-drag">
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.back()}>
+          <TouchableOpacity onPress={() => navigation.back()} style={{width: 38}}>
             <Ionicons name="arrow-back" size={28} color="#3498DB" />
           </TouchableOpacity>
           <Text style={styles.appName}>
             <Text style={styles.appNameBlue}>NUTRI</Text>
             <Text style={styles.appNameWhite}>TRAIN</Text>
           </Text>
-          <TouchableOpacity style={styles.testButton} onPress={testServerConnection}>
-            <Ionicons name="server-outline" size={24} color="#3498DB" />
-          </TouchableOpacity>
+          <View style={{width: 38}} />
         </View>
         
         <Text style={styles.title}>Log In</Text>

@@ -65,7 +65,7 @@ const ProfileScreen = () => {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag">
       <View style={styles.headerCard}>
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarText}>{user?.firstname?.[0]}</Text>

@@ -442,13 +442,18 @@ class AIChatMessage(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+AI_DAILY_MESSAGE_LIMIT = 15
+AI_MESSAGE_MAX_LENGTH = 500
+
+
 class AIChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=AI_MESSAGE_MAX_LENGTH)
 
 
 class AIChatResponse(BaseModel):
     response: str
     message_id: int
+    remaining_messages: int
 
 
 class AIChatMessageRead(BaseModel):

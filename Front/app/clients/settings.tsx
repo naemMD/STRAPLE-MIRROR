@@ -59,7 +59,7 @@ const SettingsPage = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag">
         <Text style={styles.mainTitle}>Settings</Text>
 
         <Text style={styles.sectionLabel}>PERSONAL DETAILS</Text>

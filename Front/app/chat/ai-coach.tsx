@@ -9,18 +9,53 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '@/services/api';
 
+let SecureStore: any = null;
+if (Platform.OS !== 'web') {
+  SecureStore = require('expo-secure-store');
+}
+
+const storageGet = async (key: string) => {
+  if (Platform.OS === 'web') return localStorage.getItem(key);
+  return await SecureStore.getItemAsync(key);
+};
+
+const storageSet = async (key: string, value: string) => {
+  if (Platform.OS === 'web') { localStorage.setItem(key, value); return; }
+  await SecureStore.setItemAsync(key, value);
+};
+
+const STORAGE_KEY_NAME = 'ai_coach_name';
+const STORAGE_KEY_COLOR = 'ai_coach_color';
+
+const DEFAULT_NAME = 'AI Coach';
+const DEFAULT_COLOR = '#F39C12';
+const MESSAGE_MAX_LENGTH = 500;
+const DAILY_MESSAGE_LIMIT = 15;
+
+const COLOR_OPTIONS = [
+  '#F39C12', // Gold
+  '#3498DB', // Blue
+  '#2ECC71', // Green
+  '#E74C3C', // Red
+  '#9B59B6', // Purple
+  '#1ABC9C', // Teal
+  '#E91E63', // Pink
+  '#FF5722', // Deep Orange
+];
+
 interface ChatMessage {
   id: number | string;
   role: 'user' | 'assistant';
   content: string;
   created_at?: string;
-  pending?: boolean;
 }
 
 const AiCoachScreen = () => {
@@ -32,9 +67,50 @@ const AiCoachScreen = () => {
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
+  // Limits
+  const [remainingMessages, setRemainingMessages] = useState(DAILY_MESSAGE_LIMIT);
+
+  // Customization state
+  const [coachName, setCoachName] = useState(DEFAULT_NAME);
+  const [accentColor, setAccentColor] = useState(DEFAULT_COLOR);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+
   useEffect(() => {
+    loadPreferences();
     loadHistory();
+    loadRemaining();
   }, []);
+
+  const loadPreferences = async () => {
+    try {
+      const savedName = await storageGet(STORAGE_KEY_NAME);
+      const savedColor = await storageGet(STORAGE_KEY_COLOR);
+      if (savedName) setCoachName(savedName);
+      if (savedColor) setAccentColor(savedColor);
+    } catch (e) {
+      // use defaults
+    }
+  };
+
+  const savePreferences = async (name: string, color: string) => {
+    setCoachName(name);
+    setAccentColor(color);
+    await storageSet(STORAGE_KEY_NAME, name);
+    await storageSet(STORAGE_KEY_COLOR, color);
+  };
+
+  const openSettings = () => {
+    setEditName(coachName);
+    setSettingsVisible(true);
+  };
+
+  const loadRemaining = async () => {
+    try {
+      const res = await api.get('/ai-coach/remaining');
+      setRemainingMessages(res.data.remaining);
+    } catch (e) {}
+  };
 
   const loadHistory = async () => {
     try {
@@ -48,12 +124,11 @@ const AiCoachScreen = () => {
   };
 
   const sendMessage = async () => {
-    if (!inputText.trim() || sending) return;
+    if (!inputText.trim() || sending || remainingMessages <= 0) return;
 
-    const userMessage = inputText.trim();
+    const userMessage = inputText.trim().slice(0, MESSAGE_MAX_LENGTH);
     setInputText('');
 
-    // Optimistic user message
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg: ChatMessage = {
       id: tempId,
@@ -62,8 +137,6 @@ const AiCoachScreen = () => {
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [optimisticMsg, ...prev]);
-
-    // Show typing indicator
     setSending(true);
 
     try {
@@ -75,15 +148,20 @@ const AiCoachScreen = () => {
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [aiResponse, ...prev]);
-    } catch (error) {
+      setRemainingMessages(res.data.remaining_messages);
+    } catch (error: any) {
       console.error('Error sending message to AI coach:', error);
+      const is429 = error?.response?.status === 429;
       const errorMsg: ChatMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: "Sorry, I couldn't respond. Please check your connection and try again.",
+        content: is429
+          ? "You've reached your daily message limit. Come back tomorrow!"
+          : "Sorry, I couldn't respond. Please check your connection and try again.",
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [errorMsg, ...prev]);
+      if (is429) setRemainingMessages(0);
     } finally {
       setSending(false);
     }
@@ -98,11 +176,11 @@ const AiCoachScreen = () => {
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === 'user';
     return (
-      <View style={[styles.messageBubble, isUser ? styles.userMessage : styles.aiMessage]}>
+      <View style={[styles.messageBubble, isUser ? styles.userMessage : [styles.aiMessage, { borderColor: accentColor + '33' }]]}>
         {!isUser && (
           <View style={styles.aiBadge}>
-            <Ionicons name="sparkles" size={12} color="#F39C12" />
-            <Text style={styles.aiBadgeText}>NutriCoach AI</Text>
+            <Ionicons name="sparkles" size={12} color={accentColor} />
+            <Text style={[styles.aiBadgeText, { color: accentColor }]}>{coachName}</Text>
           </View>
         )}
         <Text style={styles.messageText}>{item.content}</Text>
@@ -116,14 +194,14 @@ const AiCoachScreen = () => {
   const renderTypingIndicator = () => {
     if (!sending) return null;
     return (
-      <View style={[styles.messageBubble, styles.aiMessage, { paddingVertical: 14 }]}>
+      <View style={[styles.messageBubble, styles.aiMessage, { paddingVertical: 14, borderColor: accentColor + '33' }]}>
         <View style={styles.aiBadge}>
-          <Ionicons name="sparkles" size={12} color="#F39C12" />
-          <Text style={styles.aiBadgeText}>NutriCoach AI</Text>
+          <Ionicons name="sparkles" size={12} color={accentColor} />
+          <Text style={[styles.aiBadgeText, { color: accentColor }]}>{coachName}</Text>
         </View>
         <View style={styles.typingRow}>
-          <ActivityIndicator size="small" color="#F39C12" />
-          <Text style={styles.typingText}>Thinking...</Text>
+          <ActivityIndicator size="small" color={accentColor} />
+          <Text style={[styles.typingText, { color: accentColor }]}>Thinking...</Text>
         </View>
       </View>
     );
@@ -139,27 +217,28 @@ const AiCoachScreen = () => {
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 5 }]}>
           <TouchableOpacity onPress={() => router.back()} style={{ padding: 5 }}>
-            <Ionicons name="arrow-back" size={28} color="#F39C12" />
+            <Ionicons name="arrow-back" size={28} color={accentColor} />
           </TouchableOpacity>
-          <View style={{ alignItems: 'center' }}>
+          <TouchableOpacity onPress={openSettings} style={{ alignItems: 'center' }}>
             <View style={styles.headerTitleRow}>
-              <Ionicons name="sparkles" size={18} color="#F39C12" style={{ marginRight: 6 }} />
-              <Text style={styles.headerTitle}>Coach IA</Text>
+              <Ionicons name="sparkles" size={18} color={accentColor} style={{ marginRight: 6 }} />
+              <Text style={styles.headerTitle}>{coachName}</Text>
+              <Ionicons name="create-outline" size={14} color="#8A8D91" style={{ marginLeft: 6 }} />
             </View>
-            <Text style={styles.headerSubtitle}>Nutrition & Fitness Assistant</Text>
-          </View>
+            <Text style={[styles.headerSubtitle, { color: accentColor }]}>Tap to customize</Text>
+          </TouchableOpacity>
           <View style={{ width: 38 }} />
         </View>
 
         {/* Messages */}
         <View style={styles.listContainer}>
           {loading ? (
-            <ActivityIndicator size="large" color="#F39C12" style={{ flex: 1 }} />
+            <ActivityIndicator size="large" color={accentColor} style={{ flex: 1 }} />
           ) : (
             <>
               {messages.length === 0 && !sending && (
                 <View style={styles.emptyState}>
-                  <Ionicons name="sparkles" size={60} color="#F39C12" />
+                  <Ionicons name="sparkles" size={60} color={accentColor} />
                   <Text style={styles.emptyTitle}>Welcome!</Text>
                   <Text style={styles.emptyText}>
                     I'm your NutriTrain AI Coach.{'\n'}
@@ -174,12 +253,10 @@ const AiCoachScreen = () => {
                     ].map((suggestion, idx) => (
                       <TouchableOpacity
                         key={idx}
-                        style={styles.suggestionChip}
-                        onPress={() => {
-                          setInputText(suggestion);
-                        }}
+                        style={[styles.suggestionChip, { borderColor: accentColor + '4D' }]}
+                        onPress={() => setInputText(suggestion)}
                       >
-                        <Text style={styles.suggestionText}>{suggestion}</Text>
+                        <Text style={[styles.suggestionText, { color: accentColor }]}>{suggestion}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -203,26 +280,99 @@ const AiCoachScreen = () => {
       </View>
 
       {/* Input */}
-      <View style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Ask a question..."
-          placeholderTextColor="#8A8D91"
-          value={inputText}
-          onChangeText={setInputText}
-          multiline={false}
-          returnKeyType="send"
-          onSubmitEditing={sendMessage}
-          editable={!sending}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, sending && { opacity: 0.5 }]}
-          onPress={sendMessage}
-          disabled={!inputText.trim() || sending}
-        >
-          <Ionicons name="send" size={20} color="white" />
-        </TouchableOpacity>
+      <View style={[styles.inputWrapper, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
+        <View style={styles.inputMeta}>
+          <Text style={[styles.charCount, inputText.length > MESSAGE_MAX_LENGTH * 0.9 && { color: '#E74C3C' }]}>
+            {inputText.length}/{MESSAGE_MAX_LENGTH}
+          </Text>
+          <Text style={[styles.dailyCount, remainingMessages <= 3 && { color: '#E74C3C' }]}>
+            {remainingMessages}/{DAILY_MESSAGE_LIMIT} messages left today
+          </Text>
+        </View>
+        {remainingMessages <= 0 ? (
+          <View style={styles.limitReached}>
+            <Ionicons name="time-outline" size={18} color="#E74C3C" />
+            <Text style={styles.limitReachedText}>Daily limit reached — come back tomorrow!</Text>
+          </View>
+        ) : (
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Ask a question..."
+              placeholderTextColor="#8A8D91"
+              value={inputText}
+              onChangeText={(t) => setInputText(t.slice(0, MESSAGE_MAX_LENGTH))}
+              multiline={false}
+              returnKeyType="send"
+              onSubmitEditing={sendMessage}
+              editable={!sending}
+              maxLength={MESSAGE_MAX_LENGTH}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, { backgroundColor: accentColor }, (sending || !inputText.trim()) && { opacity: 0.5 }]}
+              onPress={sendMessage}
+              disabled={!inputText.trim() || sending}
+            >
+              <Ionicons name="send" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
+
+      {/* Settings Modal */}
+      <Modal visible={settingsVisible} transparent animationType="fade">
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setSettingsVisible(false)}
+        >
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Customize your AI Coach</Text>
+
+            {/* Name */}
+            <Text style={styles.modalLabel}>Name</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Enter a name..."
+              placeholderTextColor="#8A8D91"
+              maxLength={24}
+            />
+
+            {/* Color */}
+            <Text style={[styles.modalLabel, { marginTop: 20 }]}>Accent color</Text>
+            <View style={styles.colorGrid}>
+              {COLOR_OPTIONS.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorCircle,
+                    { backgroundColor: color },
+                    accentColor === color && styles.colorCircleSelected,
+                  ]}
+                  onPress={() => setAccentColor(color)}
+                >
+                  {accentColor === color && (
+                    <Ionicons name="checkmark" size={18} color="white" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Save */}
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: accentColor }]}
+              onPress={() => {
+                const finalName = editName.trim() || DEFAULT_NAME;
+                savePreferences(finalName, accentColor);
+                setSettingsVisible(false);
+              }}
+            >
+              <Text style={styles.saveButtonText}>Save</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -242,7 +392,7 @@ const styles = StyleSheet.create({
   },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: 'white' },
-  headerSubtitle: { fontSize: 10, color: '#F39C12' },
+  headerSubtitle: { fontSize: 10 },
   listContainer: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingBottom: 10 },
 
@@ -264,7 +414,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#232D3F',
     borderBottomLeftRadius: 5,
     borderWidth: 1,
-    borderColor: 'rgba(243, 156, 18, 0.2)',
   },
   aiBadge: {
     flexDirection: 'row',
@@ -273,7 +422,6 @@ const styles = StyleSheet.create({
   },
   aiBadgeText: {
     fontSize: 10,
-    color: '#F39C12',
     fontWeight: 'bold',
     marginLeft: 4,
   },
@@ -281,7 +429,7 @@ const styles = StyleSheet.create({
   timeText: { fontSize: 10, color: 'rgba(255, 255, 255, 0.6)', marginTop: 4 },
 
   typingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  typingText: { color: '#F39C12', fontSize: 14, fontStyle: 'italic' },
+  typingText: { fontSize: 14, fontStyle: 'italic' },
 
   emptyState: {
     alignItems: 'center',
@@ -310,15 +458,43 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: 'rgba(243, 156, 18, 0.3)',
   },
-  suggestionText: { color: '#F39C12', fontSize: 14, textAlign: 'center' },
+  suggestionText: { fontSize: 14, textAlign: 'center' },
 
+  inputWrapper: {
+    backgroundColor: '#1E2C3D',
+    paddingHorizontal: 12,
+  },
+  inputMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  charCount: {
+    fontSize: 11,
+    color: '#8A8D91',
+  },
+  dailyCount: {
+    fontSize: 11,
+    color: '#8A8D91',
+  },
+  limitReached: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  limitReachedText: {
+    color: '#E74C3C',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   inputContainer: {
     flexDirection: 'row',
-    paddingTop: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#1E2C3D',
+    paddingBottom: 4,
     alignItems: 'center',
   },
   textInput: {
@@ -331,13 +507,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sendButton: {
-    backgroundColor: '#F39C12',
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
+  },
+
+  // Settings modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#1E2C3D',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    color: '#8A8D91',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  modalInput: {
+    backgroundColor: '#1A1F2B',
+    color: 'white',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 44,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#2A4562',
+  },
+  colorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+  },
+  colorCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  colorCircleSelected: {
+    borderWidth: 3,
+    borderColor: 'white',
+  },
+  saveButton: {
+    marginTop: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 

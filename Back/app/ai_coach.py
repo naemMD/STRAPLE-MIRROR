@@ -1,12 +1,12 @@
 """
 AI Coach — LLM initialization and chat logic.
 
-Supports any OpenAI-compatible API (OpenAI, Azure, Ollama, vLLM, etc.)
+Supports any OpenAI-compatible API (OpenAI, Azure, Ollama, vLLM, Scaleway etc.)
 Configure via environment variables:
-  - AI_MODEL_PROVIDER: "openai" (default) or "ollama"
-  - AI_MODEL_NAME: model identifier (e.g. "gpt-4o-mini", "llama3")
-  - AI_API_KEY: API key (not needed for local models)
-  - AI_API_BASE_URL: custom base URL (e.g. "http://localhost:11434/v1" for Ollama)
+  - AI_MODEL_PROVIDER: "scaleway"
+  - AI_MODEL_NAME: "mistral-small-3.2-24b-instruct-2506"
+  - MISTRAL_API_KEY: Your Scaleway Secret Key
+  - AI_API_BASE_URL: "https://api.scaleway.ai/65a7dd3f-2376-4856-8e6f-8162c28d6f9a/v1"
 """
 
 import os
@@ -16,13 +16,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration (On met les valeurs Scaleway par défaut)
 # ---------------------------------------------------------------------------
 
-AI_MODEL_PROVIDER = os.getenv("AI_MODEL_PROVIDER", "openai")
-AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "gpt-4o-mini")
-AI_API_KEY = os.getenv("AI_API_KEY", "")
-AI_API_BASE_URL = os.getenv("AI_API_BASE_URL", None)
+AI_MODEL_PROVIDER = os.getenv("AI_MODEL_PROVIDER", "scaleway")
+AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", "mistral-small-3.2-24b-instruct-2506")
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")
+AI_API_BASE_URL = os.getenv("SCALEWAY_API_URL")
 
 # ---------------------------------------------------------------------------
 # Client initialization
@@ -30,17 +30,15 @@ AI_API_BASE_URL = os.getenv("AI_API_BASE_URL", None)
 
 _client: AsyncOpenAI | None = None
 
-
 def get_ai_client() -> AsyncOpenAI:
     """Return a singleton AsyncOpenAI client configured from env vars."""
     global _client
     if _client is None:
-        kwargs: dict = {"api_key": AI_API_KEY}
+        kwargs: dict = {"api_key": MISTRAL_API_KEY}
         if AI_API_BASE_URL:
             kwargs["base_url"] = AI_API_BASE_URL
         _client = AsyncOpenAI(**kwargs)
     return _client
-
 
 # ---------------------------------------------------------------------------
 # System prompt — defines the AI coach personality
@@ -62,7 +60,6 @@ Rules:
 - If you have access to the user's profile, personalize your answers based on their goals
 """
 
-
 # ---------------------------------------------------------------------------
 # Chat completion
 # ---------------------------------------------------------------------------
@@ -74,14 +71,6 @@ async def generate_ai_response(
 ) -> str:
     """
     Generate an AI coach response.
-
-    Args:
-        user_message: The user's latest message.
-        conversation_history: Previous messages [{"role": ..., "content": ...}].
-        user_context: Optional user profile data to inject into context.
-
-    Returns:
-        The AI assistant's response text.
     """
     client = get_ai_client()
 
@@ -91,7 +80,7 @@ async def generate_ai_response(
     if user_context:
         context_parts = []
         if user_context.get("firstname"):
-            context_parts.append(f"Prénom: {user_context['firstname']}")
+            context_parts.append(f"Name: {user_context['firstname']}")
         if user_context.get("goal"):
             goal_map = {
                 "lose_weight": "lose weight",
@@ -118,38 +107,17 @@ async def generate_ai_response(
 
     messages.append({"role": "user", "content": user_message})
 
-    response = await client.chat.completions.create(
-        model=AI_MODEL_NAME,
-        messages=messages,
-        max_tokens=1024,
-        temperature=0.7,
-    )
-
-    return response.choices[0].message.content or ""
-
-#   ---------------------------------------------------------------------------
-
-# from openai import OpenAI
-
-# client = OpenAI(
-#     base_url = "https://api.scaleway.ai/65a7dd3f-2376-4856-8e6f-8162c28d6f9a/v1",
-#     api_key = "SCW_SECRET_KEY" # Replace SCW_SECRET_KEY with your IAM API key
-# )
-
-# response = client.chat.completions.create(
-#   model="llama-3.1-8b-instruct",
-#   messages=[
-#     { "role": "system", "content": "You are a helpful assistant" },
-#     { "role": "user", "content": "" },
-#   ],
-#   max_tokens=2048,
-#   temperature=0.6,
-#   top_p=0.9,
-#   presence_penalty=0,
-#   stream=false,
-#   response_format={ "type": "text" }
-# )
-
-# for chunk in response:
-#     if chunk.choices and chunk.choices[0].delta.content:
-#         print(chunk.choices[0].delta.content, end="", flush=True)
+    try:
+        response = await client.chat.completions.create(
+            model=AI_MODEL_NAME,
+            messages=messages,
+            max_tokens=2048,
+            temperature=0.7,
+            top_p=1,
+            presence_penalty=0
+        )
+        return response.choices[0].message.content or ""
+        
+    except Exception as e:
+        print(f"[AI Coach] Error calling LLM API: {e}")
+        raise

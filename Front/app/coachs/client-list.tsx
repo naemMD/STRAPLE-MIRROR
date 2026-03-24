@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, ActivityIndicator, Modal, TextInput, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions, FlatList, ActivityIndicator, Modal, TextInput, ScrollView, Pressable } from 'react-native';
 import { crossAlert } from '@/services/crossAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -295,6 +295,7 @@ const CoachListScreen = () => {
       ) : (
         <FlatList
             data={clients}
+            keyboardDismissMode="on-drag"
             renderItem={renderClientItem}
             keyExtractor={item => item.id.toString()}
             contentContainerStyle={styles.clientList}
@@ -310,8 +311,8 @@ const CoachListScreen = () => {
 
       {/* 🔥 MODAL DE PROFIL DU CLIENT (Copie exacte de la page Home) */}
       <Modal visible={isRequestModalVisible} animationType="slide" transparent onRequestClose={() => setIsRequestModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
+          <Pressable style={styles.modalOverlay} onPress={() => setIsRequestModalVisible(false)}>
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
                   {selectedRequest && (
                       <>
                           <View style={styles.modalHeaderInfo}>
@@ -384,14 +385,14 @@ const CoachListScreen = () => {
                           </TouchableOpacity>
                       </>
                   )}
-              </View>
-          </View>
+              </Pressable>
+          </Pressable>
       </Modal>
 
       {/* Modal originale d'Invitation via Code */}
       <Modal visible={isInviteModalVisible} transparent animationType="slide">
-          <View style={styles.inviteModalBackground}>
-              <View style={styles.inviteModalContainer}>
+          <Pressable style={styles.inviteModalBackground} onPress={() => setIsInviteModalVisible(false)}>
+              <Pressable style={styles.inviteModalContainer} onPress={(e) => e.stopPropagation()}>
                   <Text style={styles.inviteModalTitle}>Invite a Client</Text>
                   <Text style={styles.inviteModalSubtitle}>Enter the unique code provided by the client to send a request.</Text>
                   
@@ -414,8 +415,8 @@ const CoachListScreen = () => {
                           {adding ? <ActivityIndicator color="white" /> : <Text style={styles.inviteModalBtnText}>Send Invite</Text>}
                       </TouchableOpacity>
                   </View>
-              </View>
-          </View>
+              </Pressable>
+          </Pressable>
       </Modal>
 
     </View>
