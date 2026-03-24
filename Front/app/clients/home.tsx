@@ -58,6 +58,10 @@ const HomeScreen = () => {
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [savingMeal, setSavingMeal] = useState(false);
 
+  // --- LIMITS ---
+  const MAX_MEALS_PER_DAY = 6;
+  const MAX_FOODS_PER_MEAL = 15;
+
   // --- STATE CAMERA ---
   const [permission, requestPermission] = useCameraPermissions();
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -207,11 +211,17 @@ const HomeScreen = () => {
     setLoadingSearch(true);
     try {
       const response = await api.get(`/getAlimentFromApi/${search}`);
-      setResults(response.data.map((food: any) => ({
-          name: food.name,
-          image: food.image,
-          code: food.code || food.id || food.barcode || null
-      })));
+      const data = response.data;
+      if (Array.isArray(data) && data.length === 0) {
+        setResults([]);
+        crossAlert("No results", "No food found. This may be due to API rate limits — please try again in a few seconds.");
+      } else {
+        setResults(data.map((food: any) => ({
+            name: food.name,
+            image: food.image,
+            code: food.code || food.id || food.barcode || null
+        })));
+      }
     } catch (error) {
       setResults([]);
     }
@@ -221,6 +231,10 @@ const HomeScreen = () => {
   const handleSelectFood = async (item: any) => {
     if (!searchWeight) {
         crossAlert("Error", "Weight is missing.");
+        return;
+    }
+    if (selectedFoods.length >= MAX_FOODS_PER_MEAL) {
+        crossAlert("Limit reached", `You can add up to ${MAX_FOODS_PER_MEAL} items per meal.`);
         return;
     }
 
@@ -272,6 +286,10 @@ const HomeScreen = () => {
   const handleCreateMeal = async () => {
     if (!mealName.trim() || selectedFoods.length === 0) {
       crossAlert("Missing Info", "Please add a name and at least one food.");
+      return;
+    }
+    if (!editingId && myMeals.length >= MAX_MEALS_PER_DAY) {
+      crossAlert("Limit reached", `You can only create up to ${MAX_MEALS_PER_DAY} meals per day.`);
       return;
     }
     setSavingMeal(true);
@@ -591,8 +609,17 @@ const HomeScreen = () => {
       )}
 
       <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10}}>
-          <Text style={styles.catalogueTitle}>Today's Meals</Text>
-          <TouchableOpacity style={styles.newMealButton} onPress={() => { resetForm(); setIsModalVisible(true); }}>
+          <Text style={styles.catalogueTitle}>Today's Meals <Text style={{color: '#888', fontSize: 13, fontWeight: 'normal'}}>({myMeals.length}/{MAX_MEALS_PER_DAY})</Text></Text>
+          <TouchableOpacity
+            style={[styles.newMealButton, myMeals.length >= MAX_MEALS_PER_DAY && {backgroundColor: '#555'}]}
+            onPress={() => {
+              if (myMeals.length >= MAX_MEALS_PER_DAY) {
+                crossAlert("Limit reached", `You can only create up to ${MAX_MEALS_PER_DAY} meals per day.`);
+                return;
+              }
+              resetForm(); setIsModalVisible(true);
+            }}
+          >
             <Ionicons name="restaurant-outline" size={16} color="#fff" />
             <Text style={styles.newMealButtonText}>New Meal</Text>
           </TouchableOpacity>
@@ -688,7 +715,7 @@ const HomeScreen = () => {
                 )}
 
                 <View style={styles.fixedListContainerNew}>
-                    <Text style={[styles.inputLabelModal, {marginBottom: 5}]}>Selected Items ({selectedFoods.length})</Text>
+                    <Text style={[styles.inputLabelModal, {marginBottom: 5}]}>Selected Items ({selectedFoods.length}/{MAX_FOODS_PER_MEAL})</Text>
                     {selectedFoods.length === 0 ? (
                         <View style={styles.emptyListPlaceholderNew}>
                             <Text style={{color:'#666'}}>No food selected.</Text>
