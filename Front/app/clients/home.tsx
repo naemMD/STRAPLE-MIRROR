@@ -76,6 +76,9 @@ const HomeScreen = () => {
   const [nutriments, setNutriments] = useState<any>(null);
   const [grammage, setGrammage] = useState('');
 
+  // --- STATE INJURIES ---
+  const [injuries, setInjuries] = useState<any[]>([]);
+
   // --- STATE INVITATIONS ---
   const [invitations, setInvitations] = useState([]);
 
@@ -107,7 +110,8 @@ const HomeScreen = () => {
       await Promise.all([
           fetchMeals(session.id),
           fetchDashboardStats(session.id),
-          fetchCaloriesBurned()
+          fetchCaloriesBurned(),
+          fetchInjuries()
       ]);
     }
     setLoadingStats(false);
@@ -140,6 +144,15 @@ const HomeScreen = () => {
       setCaloriesBurned(res.data);
     } catch (error) {
       console.log("Error calories burned:", error);
+    }
+  };
+
+  const fetchInjuries = async () => {
+    try {
+      const res = await api.get('/injuries');
+      setInjuries(res.data);
+    } catch (error) {
+      console.log("Error injuries:", error);
     }
   };
 
@@ -186,7 +199,7 @@ const HomeScreen = () => {
         calories: acc.calories + (getBaseMacro('energy') * ratio),
         proteins: acc.proteins + (getBaseMacro('proteins') * ratio),
         carbs: acc.carbs + (getBaseMacro('carbohydrates') * ratio),
-        fats: acc.lipids + (getBaseMacro('lipids') * ratio),
+        fats: acc.fats + (getBaseMacro('lipids') * ratio),
         sugars: acc.sugars + (getBaseMacro('sugars') * ratio),
         saturated_fats: acc.saturated_fats + (getBaseMacro('saturated_fats') * ratio),
         fibers: acc.fibers + (getBaseMacro('fibers') * ratio),
@@ -245,15 +258,20 @@ const HomeScreen = () => {
       const weightNum = parseFloat(searchWeight);
       const ratio = weightNum / 100;
 
+      const safeDiv = (val: any, r: number) => {
+          const n = parseFloat(val);
+          if (isNaN(n) || !r) return 0;
+          return n / r;
+      };
       const baseMacros = {
-          energy: parseFloat(foodDetails.energy) / ratio || 0,
-          proteins: parseFloat(foodDetails.proteins) / ratio || 0,
-          carbohydrates: parseFloat(foodDetails.carbohydrates) / ratio || 0,
-          sugars: parseFloat(foodDetails.sugars) / ratio || 0,
-          lipids: parseFloat(foodDetails.lipids) / ratio || 0,
-          saturated_fats: parseFloat(foodDetails.saturated_fats) / ratio || 0,
-          fibers: parseFloat(foodDetails.fiber) / ratio || 0,
-          salt: parseFloat(foodDetails.salt) / ratio || 0,
+          energy: safeDiv(foodDetails.energy, ratio),
+          proteins: safeDiv(foodDetails.proteins, ratio),
+          carbohydrates: safeDiv(foodDetails.carbohydrates, ratio),
+          sugars: safeDiv(foodDetails.sugars, ratio),
+          lipids: safeDiv(foodDetails.lipids, ratio),
+          saturated_fats: safeDiv(foodDetails.saturated_fats, ratio),
+          fibers: safeDiv(foodDetails.fiber, ratio),
+          salt: safeDiv(foodDetails.salt, ratio),
       };
 
       const newItem = {
@@ -459,24 +477,24 @@ const HomeScreen = () => {
         sugars: parseFloat(nutriments.sugars) || 0,
         lipids: parseFloat(nutriments.lipids) || 0,
         saturated_fats: parseFloat(nutriments.saturated_fats) || 0,
-        fibers: parseFloat(nutriments.fibers) || 0,
+        fibers: parseFloat(nutriments.fiber) || 0,
         salt: parseFloat(nutriments.salt) || 0,
     };
 
-    const newItem = { 
+    const newItem = {
         id: Date.now() + Math.random(),
-        ...selectedFood, 
-        weight: String(g), 
+        ...selectedFood,
+        weight: String(g),
         baseMacros: baseMacros,
         macros: {
-            energy: (nutriments.energy * ratio).toFixed(1),
-            proteins: (nutriments.proteins * ratio).toFixed(1),
-            carbohydrates: (nutriments.carbohydrates * ratio).toFixed(1),
-            sugars: (nutriments.sugars * ratio).toFixed(1),
-            lipids: (nutriments.lipids * ratio).toFixed(1),
-            saturated_fats: (nutriments.saturated_fats * ratio).toFixed(1),
-            fibers: (nutriments.fibers * ratio).toFixed(1),
-            salt: (nutriments.salt * ratio).toFixed(1)
+            energy: (baseMacros.energy * ratio).toFixed(1),
+            proteins: (baseMacros.proteins * ratio).toFixed(1),
+            carbohydrates: (baseMacros.carbohydrates * ratio).toFixed(1),
+            sugars: (baseMacros.sugars * ratio).toFixed(1),
+            lipids: (baseMacros.lipids * ratio).toFixed(1),
+            saturated_fats: (baseMacros.saturated_fats * ratio).toFixed(1),
+            fibers: (baseMacros.fibers * ratio).toFixed(1),
+            salt: (baseMacros.salt * ratio).toFixed(1)
         }
     };
     setSelectedFoods(prev => [...prev, newItem]);
@@ -514,6 +532,46 @@ const HomeScreen = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
+      {/* INJURY ALERT BANNER */}
+      {injuries.length > 0 && (
+        <TouchableOpacity
+          style={styles.injuryAlertBanner}
+          onPress={() => router.push('/chat/ai-coach')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.injuryAlertIconContainer}>
+            <Ionicons name="warning" size={22} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.injuryAlertTitle}>Active Injury</Text>
+            <Text style={styles.injuryAlertText}>
+              {injuries.map((inj: any) => {
+                const labels: Record<string, string> = {
+                  right_shoulder: 'Right Shoulder', left_shoulder: 'Left Shoulder',
+                  right_trapezius: 'Right Trapezius', left_trapezius: 'Left Trapezius',
+                  upper_back: 'Upper Back', lower_back: 'Lower Back', neck: 'Neck',
+                  right_elbow: 'Right Elbow', left_elbow: 'Left Elbow',
+                  right_wrist: 'Right Wrist', left_wrist: 'Left Wrist',
+                  chest: 'Chest', abs: 'Abs',
+                  right_hip: 'Right Hip', left_hip: 'Left Hip',
+                  right_knee: 'Right Knee', left_knee: 'Left Knee',
+                  right_ankle: 'Right Ankle', left_ankle: 'Left Ankle',
+                  right_foot: 'Right Foot', left_foot: 'Left Foot',
+                  right_calf: 'Right Calf', left_calf: 'Left Calf',
+                  right_thigh: 'Right Thigh', left_thigh: 'Left Thigh',
+                  right_bicep: 'Right Bicep', left_bicep: 'Left Bicep',
+                  right_tricep: 'Right Tricep', left_tricep: 'Left Tricep',
+                  right_forearm: 'Right Forearm', left_forearm: 'Left Forearm',
+                };
+                return labels[inj.body_zone] || inj.body_zone;
+              }).join(', ')}
+            </Text>
+            <Text style={styles.injuryAlertSubtext}>Be careful during training — tap to manage</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
+        </TouchableOpacity>
+      )}
+
       {/* DASHBOARD */}
       {loadingStats || !dashboardStats ? (
           <ActivityIndicator color="#3498DB" style={{margin: 20}} />
@@ -550,17 +608,17 @@ const HomeScreen = () => {
         onPress={() => router.push('/clients/trainings')}
         activeOpacity={0.7}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={styles.fireIconContainer}>
             <Ionicons name="flame" size={22} color="#e74c3c" />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, marginRight: 10 }}>
             <Text style={{ color: '#aaa', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Calories Burned Today</Text>
-            <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', marginTop: 2 }}>
+            <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold', marginTop: 2 }} numberOfLines={1} adjustsFontSizeToFit>
               {caloriesBurned ? caloriesBurned.calories_burned : 0} <Text style={{ color: '#aaa', fontSize: 13, fontWeight: 'normal' }}>kcal</Text>
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
+          <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
             <Text style={{ color: '#888', fontSize: 11 }}>
               {caloriesBurned ? caloriesBurned.workout_count : 0} workout{(caloriesBurned?.workout_count ?? 0) !== 1 ? 's' : ''}
             </Text>
@@ -760,8 +818,8 @@ const HomeScreen = () => {
                 </View>
 
                 <View style={styles.summaryBoxNew}>
-                    <Text style={styles.summaryTitleNew}>Total: {totalMealMacros.calories.toFixed(0)} kcal</Text>
-                    <Text style={styles.summaryTextNew}>P: {totalMealMacros.proteins.toFixed(1)}g | C: {totalMealMacros.carbs.toFixed(1)}g | F: {totalMealMacros.fats.toFixed(1)}g</Text>
+                    <Text style={styles.summaryTitleNew}>Total: {(totalMealMacros.calories || 0).toFixed(0)} kcal</Text>
+                    <Text style={styles.summaryTextNew}>P: {(totalMealMacros.proteins || 0).toFixed(1)}g | C: {(totalMealMacros.carbs || 0).toFixed(1)}g | F: {(totalMealMacros.fats || 0).toFixed(1)}g</Text>
                 </View>
 
                 <View style={[styles.modalActionsNew, { gap: 10 }]}>
@@ -931,6 +989,39 @@ const styles = StyleSheet.create({
   macroItem: { width: '30%', backgroundColor: '#2A4562', padding: 8, borderRadius: 8, alignItems: 'center' },
   macroValue: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   macroLabel: { color: '#ccc', fontSize: 10 },
+  injuryAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#C0392B',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    gap: 12,
+  },
+  injuryAlertIconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  injuryAlertTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  injuryAlertText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  injuryAlertSubtext: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    marginTop: 3,
+  },
   caloriesBurnedCard: { backgroundColor: '#232D3F', borderRadius: 16, padding: 15, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: '#e74c3c' },
   fireIconContainer: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(231,76,60,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   catalogueTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },

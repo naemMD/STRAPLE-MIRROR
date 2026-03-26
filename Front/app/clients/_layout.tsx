@@ -90,7 +90,7 @@ export default function ClientLayout() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push("/clients/coach")} style={{ position: "relative" }}>
-              <Ionicons name="people" size={26} color={currentPage === "coach" ? "#3498DB" : "white"} />
+              <Ionicons name="chatbubbles" size={26} color={currentPage === "coach" ? "#3498DB" : "white"} />
               {unreadCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
@@ -99,7 +99,7 @@ export default function ClientLayout() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push("/clients/forum")}>
-              <Ionicons name="chatbubbles" size={26} color={currentPage === "forum" ? "#3498DB" : "white"} />
+              <Ionicons name="people" size={26} color={currentPage === "forum" ? "#3498DB" : "white"} />
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push("/clients/settings")}>

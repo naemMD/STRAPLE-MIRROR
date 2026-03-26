@@ -226,6 +226,7 @@ class Users(Base):
     weight = Column(Float, nullable=True)
     height = Column(Float, nullable=True)
     goal = Column(Enum('lose_weight', 'gain_muscle', 'maintain_weight', name='goal_enum'), nullable=True)
+    fitness_level = Column(Enum('beginner', 'intermediate', 'advanced', name='fitness_level_enum'), nullable=True)
 
     coach_id = Column(Integer, ForeignKey('users.id'), nullable=True)
     coach = relationship("Users", remote_side=[id], backref="clients")
@@ -256,6 +257,7 @@ class UserCreate(BaseModel):
     weight: Optional[float] = None
     height: Optional[float] = None
     goal: Optional[str] = None
+    fitness_level: Optional[str] = None
 
 class UserUpdate(BaseModel):
     firstname: Optional[str] = None
@@ -270,6 +272,7 @@ class UserUpdate(BaseModel):
     weight: Optional[float] = None
     height: Optional[float] = None
     goal: Optional[str] = None
+    fitness_level: Optional[str] = None
 
 class ExerciseSetDetail(BaseModel):
     set_number: int
@@ -310,6 +313,7 @@ class WorkoutRead(WorkoutBase):
     exercises: List[WorkoutExerciseRead] = []
 
     is_completed: bool = False
+    is_ai_generated: bool = False
 
     class Config:
         from_attributes = True
@@ -330,6 +334,7 @@ class Workout(Base):
     exercises = relationship("WorkoutExercise", back_populates="workout", cascade="all, delete-orphan")
 
     is_completed = Column(Boolean, default=False)
+    is_ai_generated = Column(Boolean, default=False)
 
 class WorkoutExercise(Base):
     __tablename__ = "workout_exercises"
@@ -355,6 +360,13 @@ class MacroUpdate(BaseModel):
 # Forums
 # ---------------------------------------------------------------------------
 
+FORUM_TOPICS = [
+    "nutrition", "training", "wellness", "stretching", "recovery",
+    "motivation", "health", "weight_loss", "muscle_gain", "supplements",
+    "mental_health", "injuries", "cardio", "yoga", "other",
+]
+
+
 class Forum(Base):
     __tablename__ = "forums"
 
@@ -362,6 +374,7 @@ class Forum(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(80), nullable=False)
     description = Column(String(500), nullable=True)
+    topic = Column(String(30), nullable=True)
     status = Column(Enum('public', 'private', 'draft', name='forum_status_enum'), default='public', nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_activity_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -397,12 +410,14 @@ class ForumFavorite(Base):
 class ForumCreate(BaseModel):
     title: str = Field(..., max_length=80)
     description: Optional[str] = Field(None, max_length=500)
+    topic: Optional[str] = None
     status: str = "public"
 
 
 class ForumUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=80)
     description: Optional[str] = Field(None, max_length=500)
+    topic: Optional[str] = None
     status: Optional[str] = None
 
 
@@ -411,6 +426,7 @@ class ForumRead(BaseModel):
     user_id: int
     title: str
     description: Optional[str] = None
+    topic: Optional[str] = None
     status: str
     created_at: datetime
     last_activity_at: datetime
@@ -439,6 +455,10 @@ class AIChatMessage(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(String(20), nullable=False)  # "user" or "assistant"
     content = Column(Text, nullable=False)
+    proposed_injuries = Column(JSON, nullable=True)   # [{body_zone, description}, ...]
+    injury_status = Column(String(20), nullable=True) # "pending" | "confirmed" | "declined"
+    show_body_map = Column(Boolean, default=False)
+    is_cleared = Column(Boolean, default=False)        # soft-delete for clear history
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -450,16 +470,56 @@ class AIChatRequest(BaseModel):
     message: str = Field(..., max_length=AI_MESSAGE_MAX_LENGTH)
 
 
+class InjuryProposal(BaseModel):
+    body_zone: str
+    description: str
+
+
 class AIChatResponse(BaseModel):
     response: str
     message_id: int
     remaining_messages: int
+    proposed_injuries: List[InjuryProposal] = []
+    show_body_map: bool = False
+
+
+class InjuryConfirmRequest(BaseModel):
+    injuries: List[InjuryProposal]
 
 
 class AIChatMessageRead(BaseModel):
     id: int
     role: str
     content: str
+    proposed_injuries: Optional[List[Dict]] = None
+    injury_status: Optional[str] = None
+    show_body_map: bool = False
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# User Injuries
+# ---------------------------------------------------------------------------
+
+class UserInjury(Base):
+    __tablename__ = "user_injuries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body_zone = Column(String(50), nullable=False)   # e.g. "right_shoulder", "lower_back", "left_knee"
+    description = Column(Text, nullable=True)         # free-text from AI assessment
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserInjuryRead(BaseModel):
+    id: int
+    body_zone: str
+    description: Optional[str] = None
+    is_active: bool
     created_at: datetime
 
     class Config:
@@ -485,6 +545,7 @@ class ForumDetailRead(BaseModel):
     user_id: int
     title: str
     description: Optional[str] = None
+    topic: Optional[str] = None
     status: str
     created_at: datetime
     last_activity_at: datetime
@@ -496,6 +557,44 @@ class ForumDetailRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# AI Program Generation
+# ---------------------------------------------------------------------------
+
+class AvailableExercise(BaseModel):
+    name: str
+    muscle: str
+    type: str
+    difficulty: str
+
+class DayConfig(BaseModel):
+    date: str
+    focus: str = "Full Body"
+    mode: str = "progressive"
+
+class GenerateProgramRequest(BaseModel):
+    selected_dates: List[str]
+    available_exercises: List[AvailableExercise]
+    day_configs: Optional[List[DayConfig]] = None
+
+class GeneratedWorkoutExercise(BaseModel):
+    name: str
+    muscle: str
+    num_sets: int = 3
+    rest_time: int = 60
+    sets_details: List[ExerciseSetDetail] = []
+
+class GeneratedWorkout(BaseModel):
+    name: str
+    description: Optional[str] = None
+    difficulty: str = "Intermediate"
+    scheduled_date: str
+    exercises: List[GeneratedWorkoutExercise]
+
+class SaveGeneratedProgramRequest(BaseModel):
+    workouts: List[GeneratedWorkout]
 
 
 __all__ = [
@@ -528,6 +627,7 @@ __all__ = [
     "UserGoalUpdate",
     "DashboardStats",
     "MacroUpdate",
+    "FORUM_TOPICS",
     "Forum",
     "ForumMessage",
     "ForumFavorite",
@@ -541,4 +641,14 @@ __all__ = [
     "AIChatRequest",
     "AIChatResponse",
     "AIChatMessageRead",
+    "InjuryProposal",
+    "InjuryConfirmRequest",
+    "UserInjury",
+    "UserInjuryRead",
+    "AvailableExercise",
+    "DayConfig",
+    "GenerateProgramRequest",
+    "GeneratedWorkout",
+    "GeneratedWorkoutExercise",
+    "SaveGeneratedProgramRequest",
 ]

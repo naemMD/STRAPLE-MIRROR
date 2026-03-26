@@ -5,14 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.model import *
 from app.database import get_session
 from app.api import *
-from app.schemas import WorkoutCreate, WorkoutRead, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage, AI_DAILY_MESSAGE_LIMIT
+from app.schemas import WorkoutCreate, WorkoutRead, WorkoutExerciseCreate, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage, AI_DAILY_MESSAGE_LIMIT, UserInjury, UserInjuryRead, InjuryProposal, InjuryConfirmRequest, GenerateProgramRequest, SaveGeneratedProgramRequest, Users
 from typing import List, Any, Optional
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from sqlalchemy import select, desc, func as sa_func
-from app.ai_coach import generate_ai_response
+from sqlalchemy import select, desc, update, func as sa_func
+from app.ai_coach import generate_ai_response, generate_workout_program
 from datetime import date
 import os
+import re
 
 router = APIRouter()
 load_dotenv()
@@ -223,6 +224,154 @@ async def delete_workout_route(
     session: AsyncSession = Depends(get_session)
 ):
     return await delete_workout_for_user(session, workout_id, user_id)
+
+
+@router.post("/workouts/generate-program")
+async def generate_program_route(
+    request_data: GenerateProgramRequest,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Generate an AI-adapted workout program for selected dates."""
+    # Fetch user profile
+    result = await session.execute(select(Users).where(Users.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Fetch active injuries
+    injury_result = await session.execute(
+        select(UserInjury).where(UserInjury.user_id == user_id, UserInjury.is_active == True)
+    )
+    active_injuries = injury_result.scalars().all()
+    injury_list = [f"{inj.body_zone}: {inj.description or 'no details'}" for inj in active_injuries]
+
+    user_context = {
+        "goal": user.goal,
+        "fitness_level": getattr(user, "fitness_level", None) or "intermediate",
+        "weight": user.weight,
+        "injuries": injury_list,
+    }
+
+    available_exercises = [ex.model_dump() for ex in request_data.available_exercises]
+    day_configs = [dc.model_dump() for dc in request_data.day_configs] if request_data.day_configs else None
+
+    # Call AI to generate program
+    try:
+        workouts_data = await generate_workout_program(
+            selected_dates=request_data.selected_dates,
+            available_exercises=available_exercises,
+            user_context=user_context,
+            day_configs=day_configs,
+        )
+    except Exception as e:
+        print(f"[AI Program] Error generating program: {e}")
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+
+    # Create workouts in DB
+    count = 0
+    for workout in workouts_data:
+        try:
+            exercises = []
+            for ex in workout.get("exercises", []):
+                exercises.append(WorkoutExerciseCreate(
+                    name=ex["name"],
+                    muscle=ex["muscle"],
+                    num_sets=ex.get("num_sets", 3),
+                    rest_time=ex.get("rest_time", 60),
+                    sets_details=ex.get("sets_details", []),
+                ))
+            workout_create = WorkoutCreate(
+                name=workout["name"],
+                description=workout.get("description"),
+                difficulty=workout.get("difficulty", "Intermediate"),
+                scheduled_date=workout["scheduled_date"],
+                exercises=exercises,
+            )
+            await create_full_workout(session, user_id, workout_create, is_ai_generated=True)
+            count += 1
+        except Exception as e:
+            print(f"[AI Program] Error creating workout '{workout.get('name')}': {e}")
+            continue
+
+    return {"message": f"Generated {count} workouts", "count": count}
+
+
+@router.post("/workouts/preview-program")
+async def preview_program_route(
+    request_data: GenerateProgramRequest,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Generate an AI workout program and return it for preview (no save)."""
+    result = await session.execute(select(Users).where(Users.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    injury_result = await session.execute(
+        select(UserInjury).where(UserInjury.user_id == user_id, UserInjury.is_active == True)
+    )
+    active_injuries = injury_result.scalars().all()
+    injury_list = [f"{inj.body_zone}: {inj.description or 'no details'}" for inj in active_injuries]
+
+    user_context = {
+        "goal": user.goal,
+        "fitness_level": getattr(user, "fitness_level", None) or "intermediate",
+        "weight": user.weight,
+        "injuries": injury_list,
+    }
+
+    available_exercises = [ex.model_dump() for ex in request_data.available_exercises]
+    day_configs = [dc.model_dump() for dc in request_data.day_configs] if request_data.day_configs else None
+
+    try:
+        workouts_data = await generate_workout_program(
+            selected_dates=request_data.selected_dates,
+            available_exercises=available_exercises,
+            user_context=user_context,
+            day_configs=day_configs,
+        )
+    except Exception as e:
+        print(f"[AI Program] Error generating preview: {e}")
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+
+    return {"workouts": workouts_data}
+
+
+@router.post("/workouts/save-generated-program")
+async def save_generated_program_route(
+    request_data: SaveGeneratedProgramRequest,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Save previously previewed AI-generated workouts."""
+    count = 0
+    for workout in request_data.workouts:
+        try:
+            exercises = []
+            for ex in workout.exercises:
+                exercises.append(WorkoutExerciseCreate(
+                    name=ex.name,
+                    muscle=ex.muscle,
+                    num_sets=ex.num_sets,
+                    rest_time=ex.rest_time,
+                    sets_details=ex.sets_details,
+                ))
+            workout_create = WorkoutCreate(
+                name=workout.name,
+                description=workout.description,
+                difficulty=workout.difficulty,
+                scheduled_date=workout.scheduled_date,
+                exercises=exercises,
+            )
+            await create_full_workout(session, user_id, workout_create, is_ai_generated=True)
+            count += 1
+        except Exception as e:
+            print(f"[AI Program] Error saving workout '{workout.name}': {e}")
+            continue
+
+    return {"message": f"Saved {count} workouts", "count": count}
 
 
 # ---------------------------------------------------------------------------
@@ -574,34 +723,44 @@ async def get_chat_history_route(
 # ---------------------------------------------------------------------------
 
 # -- GET fixes
+@router.get("/forums/topics")
+async def get_forum_topics():
+    from app.schemas import FORUM_TOPICS
+    return {"topics": FORUM_TOPICS}
+
+
 @router.get("/forums/my-forums")
 async def get_my_forums_route(
     page: int = 1,
     page_size: int = 15,
+    topic: str | None = None,
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session)
 ):
-    return await get_my_forums(session, user_id, page, page_size)
+    return await get_my_forums(session, user_id, page, page_size, topic=topic)
 
 
 @router.get("/forums/favorites")
 async def get_favorite_forums_route(
     page: int = 1,
     page_size: int = 15,
+    topic: str | None = None,
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session)
 ):
-    return await get_favorite_forums(session, user_id, page, page_size)
+    return await get_favorite_forums(session, user_id, page, page_size, topic=topic)
 
 
 @router.get("/forums")
 async def get_public_forums_route(
     page: int = 1,
     page_size: int = 15,
+    topic: str | None = None,
+    sort: str = "recent",
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session)
 ):
-    return await get_public_forums(session, user_id, page, page_size)
+    return await get_public_forums(session, user_id, page, page_size, topic=topic, sort=sort)
 
 
 # -- POST fix
@@ -729,10 +888,23 @@ async def ai_coach_chat_route(
                 "daily_caloric_needs": user.daily_caloric_needs,
             }
 
+        # Fetch active injuries for context
+        injury_result = await session.execute(
+            select(UserInjury)
+            .where(UserInjury.user_id == current_user_id, UserInjury.is_active == True)
+        )
+        active_injuries = injury_result.scalars().all()
+        if user_context and active_injuries:
+            injury_lines = [f"- {inj.body_zone}: {inj.description or 'no details'}" for inj in active_injuries]
+            user_context["active_injuries"] = "\n".join(injury_lines)
+
         # Load recent conversation history from DB
         result = await session.execute(
             select(AIChatMessage)
-            .where(AIChatMessage.user_id == current_user_id)
+            .where(
+                AIChatMessage.user_id == current_user_id,
+                AIChatMessage.is_cleared == False,
+            )
             .order_by(desc(AIChatMessage.created_at))
             .limit(20)
         )
@@ -749,6 +921,31 @@ async def ai_coach_chat_route(
             user_context=user_context,
         )
 
+        # Parse [INJURY_PROPOSAL: ...] tags from AI response (proposals only, not saved yet)
+        proposal_pattern = r'\[INJURY_PROPOSAL:\s*zone="([^"]+)",\s*description="([^"]+)"\]'
+        proposed_injuries = []
+        for match in re.finditer(proposal_pattern, ai_response):
+            proposed_injuries.append(InjuryProposal(body_zone=match.group(1), description=match.group(2)))
+
+        # Detect [SHOW_BODY_MAP] tag
+        show_body_map = '[SHOW_BODY_MAP]' in ai_response
+
+        # Backend guard: if body map was already shown in this conversation, force it off
+        if show_body_map:
+            already_shown = await session.execute(
+                select(sa_func.count(AIChatMessage.id)).where(
+                    AIChatMessage.user_id == current_user_id,
+                    AIChatMessage.show_body_map == True,
+                    AIChatMessage.is_cleared == False,
+                )
+            )
+            if (already_shown.scalar() or 0) > 0:
+                show_body_map = False
+
+        # Strip all tags from the displayed response
+        clean_response = re.sub(proposal_pattern, '', ai_response)
+        clean_response = clean_response.replace('[SHOW_BODY_MAP]', '').strip()
+
         # Save user message
         user_msg = AIChatMessage(
             user_id=current_user_id,
@@ -757,18 +954,27 @@ async def ai_coach_chat_route(
         )
         session.add(user_msg)
 
-        # Save AI response
+        # Save AI response (clean version without tags)
         ai_msg = AIChatMessage(
             user_id=current_user_id,
             role="assistant",
-            content=ai_response,
+            content=clean_response,
+            proposed_injuries=[p.dict() for p in proposed_injuries] if proposed_injuries else None,
+            injury_status="pending" if proposed_injuries else None,
+            show_body_map=show_body_map,
         )
         session.add(ai_msg)
         await session.commit()
         await session.refresh(ai_msg)
 
         remaining = AI_DAILY_MESSAGE_LIMIT - daily_count - 1
-        return AIChatResponse(response=ai_response, message_id=ai_msg.id, remaining_messages=remaining)
+        return AIChatResponse(
+            response=clean_response,
+            message_id=ai_msg.id,
+            remaining_messages=remaining,
+            proposed_injuries=proposed_injuries,
+            show_body_map=show_body_map,
+        )
 
     except HTTPException:
         raise
@@ -804,7 +1010,10 @@ async def ai_coach_history_route(
     """Fetch the AI coach conversation history for the current user."""
     result = await session.execute(
         select(AIChatMessage)
-        .where(AIChatMessage.user_id == current_user_id)
+        .where(
+            AIChatMessage.user_id == current_user_id,
+            AIChatMessage.is_cleared == False,
+        )
         .order_by(AIChatMessage.created_at)
     )
     return result.scalars().all()
@@ -815,12 +1024,105 @@ async def ai_coach_clear_history_route(
     current_user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
 ):
-    """Clear the AI coach conversation history for the current user."""
-    result = await session.execute(
-        select(AIChatMessage).where(AIChatMessage.user_id == current_user_id)
+    """Clear the AI coach conversation history for the current user (soft-delete)."""
+    await session.execute(
+        update(AIChatMessage)
+        .where(
+            AIChatMessage.user_id == current_user_id,
+            AIChatMessage.is_cleared == False,
+        )
+        .values(is_cleared=True)
     )
-    messages = result.scalars().all()
-    for msg in messages:
-        await session.delete(msg)
     await session.commit()
     return {"detail": "Conversation history cleared"}
+
+
+@router.patch("/ai-coach/messages/{message_id}/injury-status")
+async def update_injury_status(
+    message_id: int,
+    request: Request,
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Update injury_status on a chat message (confirmed/declined)."""
+    body = await request.json()
+    status = body.get("injury_status")
+    if status not in ("confirmed", "declined"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    result = await session.execute(
+        select(AIChatMessage).where(
+            AIChatMessage.id == message_id,
+            AIChatMessage.user_id == current_user_id,
+        )
+    )
+    msg = result.scalars().first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    msg.injury_status = status
+    await session.commit()
+    return {"detail": "Status updated"}
+
+
+# ---------------------------------------------------------------------------
+# User Injuries
+# ---------------------------------------------------------------------------
+
+@router.get("/injuries", response_model=List[UserInjuryRead])
+async def get_user_injuries(
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Get all active injuries for the current user."""
+    result = await session.execute(
+        select(UserInjury)
+        .where(UserInjury.user_id == current_user_id, UserInjury.is_active == True)
+        .order_by(desc(UserInjury.created_at))
+    )
+    return result.scalars().all()
+
+
+@router.post("/injuries/confirm", response_model=List[UserInjuryRead])
+async def confirm_injuries(
+    request: InjuryConfirmRequest,
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Confirm and save proposed injuries (called via button, no chat message consumed)."""
+    created = []
+    for proposal in request.injuries:
+        # Skip duplicates
+        existing = await session.execute(
+            select(UserInjury).where(
+                UserInjury.user_id == current_user_id,
+                UserInjury.body_zone == proposal.body_zone,
+                UserInjury.is_active == True,
+            )
+        )
+        if existing.scalars().first():
+            continue
+        injury = UserInjury(
+            user_id=current_user_id,
+            body_zone=proposal.body_zone,
+            description=proposal.description,
+        )
+        session.add(injury)
+        created.append(injury)
+    await session.commit()
+    for inj in created:
+        await session.refresh(inj)
+    return created
+
+
+@router.delete("/injuries/{injury_id}")
+async def delete_user_injury(
+    injury_id: int,
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Deactivate (soft-delete) an injury."""
+    injury = await session.get(UserInjury, injury_id)
+    if not injury or injury.user_id != current_user_id:
+        raise HTTPException(status_code=404, detail="Injury not found")
+    injury.is_active = False
+    await session.commit()
+    return {"detail": "Injury removed"}

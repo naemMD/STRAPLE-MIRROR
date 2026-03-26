@@ -29,6 +29,7 @@ const SignupPage = () => {
   const [height, setHeight] = useState('');
 
   const [goal, setGoal] = useState('lose_weight');
+  const [fitnessLevel, setFitnessLevel] = useState('beginner');
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -202,7 +203,8 @@ const SignupPage = () => {
             longitude: currentLon,
             weight: weight ? parseFloat(weight) : null,
             height: height ? parseFloat(height) : null,
-            goal: goal
+            goal: goal,
+            fitness_level: fitnessLevel
         });
         
         // 🔥 2. AUTO-LOGIN : ON SAUVEGARDE LE TOKEN ICI
@@ -411,9 +413,9 @@ const SignupPage = () => {
               <Text style={styles.inputLabel}>Main Goal</Text>
               <View style={styles.goalContainer}>
                 {['lose_weight', 'maintain_weight', 'gain_muscle'].map((g) => (
-                  <TouchableOpacity 
-                    key={g} 
-                    style={[styles.goalButton, goal === g && styles.selectedGoalButton]} 
+                  <TouchableOpacity
+                    key={g}
+                    style={[styles.goalButton, goal === g && styles.selectedGoalButton]}
                     onPress={() => setGoal(g)}
                   >
                     <Text style={[styles.goalText, goal === g && styles.selectedGoalText]}>
@@ -422,6 +424,27 @@ const SignupPage = () => {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <Text style={styles.inputLabel}>Fitness Level</Text>
+              {[
+                { value: 'beginner', label: 'Beginner', desc: 'New to training or less than 6 months of regular practice' },
+                { value: 'intermediate', label: 'Intermediate', desc: '6 months to 2 years of consistent training' },
+                { value: 'advanced', label: 'Advanced', desc: 'Over 2 years of serious, structured training' },
+              ].map((lvl) => (
+                <TouchableOpacity
+                  key={lvl.value}
+                  style={[styles.fitnessLevelOption, fitnessLevel === lvl.value && styles.fitnessLevelOptionSelected]}
+                  onPress={() => setFitnessLevel(lvl.value)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[styles.fitnessRadio, fitnessLevel === lvl.value && styles.fitnessRadioSelected]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.fitnessLevelLabel, fitnessLevel === lvl.value && styles.fitnessLevelLabelSelected]}>{lvl.label}</Text>
+                      <Text style={styles.fitnessLevelDesc}>{lvl.desc}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
 
@@ -505,6 +528,13 @@ const styles = StyleSheet.create({
   selectedGoalButton: { backgroundColor: '#3498DB' },
   goalText: { color: '#FFFFFF', fontSize: 11, textAlign: 'center' },
   selectedGoalText: { fontWeight: 'bold' },
+  fitnessLevelOption: { backgroundColor: '#2A4562', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1.5, borderColor: 'transparent' },
+  fitnessLevelOptionSelected: { borderColor: '#3498DB', backgroundColor: '#1E3A55' },
+  fitnessRadio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#8A8D91' },
+  fitnessRadioSelected: { borderColor: '#3498DB', backgroundColor: '#3498DB' },
+  fitnessLevelLabel: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  fitnessLevelLabelSelected: { color: '#3498DB' },
+  fitnessLevelDesc: { color: '#8A8D91', fontSize: 12, marginTop: 2 },
   signupButton: { backgroundColor: '#3498DB', borderRadius: 10, paddingVertical: 15, alignItems: 'center', marginBottom: 20, zIndex: 0 },
   signupButtonDisabled: { backgroundColor: '#2A4562', opacity: 0.7 },
   signupButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },

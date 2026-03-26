@@ -9,11 +9,39 @@ import { useRouter } from 'expo-router';
 import { getToken } from '@/services/authStorage';
 import { crossAlert } from '@/services/crossAlert';
 import { jwtDecode } from 'jwt-decode';
-import { Toast } from 'react-native-toast-message/lib/src/Toast';
 import api from '@/services/api';
+import { Toast } from 'react-native-toast-message/lib/src/Toast';
 
 type Tab = 'all' | 'favorites' | 'mine';
 type ViewMode = 'list' | 'detail';
+
+const FORUM_TOPICS = [
+  { key: 'nutrition', label: 'Nutrition', icon: 'nutrition' },
+  { key: 'training', label: 'Training', icon: 'barbell' },
+  { key: 'wellness', label: 'Wellness', icon: 'heart' },
+  { key: 'stretching', label: 'Stretching', icon: 'body' },
+  { key: 'recovery', label: 'Recovery', icon: 'bed' },
+  { key: 'motivation', label: 'Motivation', icon: 'flash' },
+  { key: 'health', label: 'Health', icon: 'medkit' },
+  { key: 'weight_loss', label: 'Weight Loss', icon: 'trending-down' },
+  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' },
+  { key: 'supplements', label: 'Supplements', icon: 'flask' },
+  { key: 'mental_health', label: 'Mental Health', icon: 'happy' },
+  { key: 'injuries', label: 'Injuries', icon: 'bandage' },
+  { key: 'cardio', label: 'Cardio', icon: 'bicycle' },
+  { key: 'yoga', label: 'Yoga', icon: 'leaf' },
+  { key: 'other', label: 'Other', icon: 'ellipsis-horizontal' },
+] as const;
+
+const TOPIC_COLORS: Record<string, string> = {
+  nutrition: '#27AE60', training: '#3498DB', wellness: '#E91E63',
+  stretching: '#9B59B6', recovery: '#1ABC9C', motivation: '#F39C12',
+  health: '#E74C3C', weight_loss: '#2ECC71', muscle_gain: '#E67E22',
+  supplements: '#8E44AD', mental_health: '#3498DB', injuries: '#E74C3C',
+  cardio: '#E74C3C', yoga: '#27AE60', other: '#95A5A6',
+};
+
+type SortOption = 'recent' | 'oldest' | 'popular';
 
 const formatTime = (iso: string | null) => {
   if (!iso) return '';
@@ -45,9 +73,14 @@ const ForumScreen = () => {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filterTopic, setFilterTopic] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newTopic, setNewTopic] = useState<string | null>(null);
   const [newStatus, setNewStatus] = useState('public');
   const [creating, setCreating] = useState(false);
 
@@ -55,6 +88,7 @@ const ForumScreen = () => {
   const [editForum, setEditForum] = useState<any>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editTopic, setEditTopic] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState('public');
   const [saving, setSaving] = useState(false);
 
@@ -72,7 +106,7 @@ const ForumScreen = () => {
       setPage(1);
       loadForums(1);
     }
-  }, [activeTab, currentUserId]);
+  }, [activeTab, currentUserId, filterTopic, sortBy]);
 
   const loadCurrentUser = async () => {
     try {
@@ -90,6 +124,9 @@ const ForumScreen = () => {
       if (activeTab === 'all') url = `/forums?page=${p}&page_size=15`;
       else if (activeTab === 'favorites') url = `/forums/favorites?page=${p}&page_size=15`;
       else url = `/forums/my-forums?page=${p}&page_size=15`;
+
+      if (filterTopic) url += `&topic=${filterTopic}`;
+      if (activeTab === 'all') url += `&sort=${sortBy}`;
 
       const res = await api.get(url);
       setForums(p === 1 ? res.data.forums : [...forums, ...res.data.forums]);
@@ -123,11 +160,13 @@ const ForumScreen = () => {
       await api.post(`/forums`, {
         title: newTitle.trim(),
         description: newDescription.trim() || null,
+        topic: newTopic,
         status: newStatus,
       });
       setShowCreateModal(false);
       setNewTitle('');
       setNewDescription('');
+      setNewTopic(null);
       setNewStatus('public');
       Toast.show({ type: 'success', text1: 'Forum created!' });
       setActiveTab('mine');
@@ -142,6 +181,7 @@ const ForumScreen = () => {
     setEditForum(forum);
     setEditTitle(forum.title);
     setEditDescription(forum.description || '');
+    setEditTopic(forum.topic || null);
     setEditStatus(forum.status);
     setShowEditModal(true);
   };
@@ -153,6 +193,7 @@ const ForumScreen = () => {
       await api.patch(`/forums/${editForum.id}`, {
         title: editTitle.trim(),
         description: editDescription.trim() || null,
+        topic: editTopic,
         status: editStatus,
       });
       setShowEditModal(false);
@@ -184,7 +225,7 @@ const ForumScreen = () => {
 
   const handleToggleFavorite = async (forum: any) => {
     try {
-      const res = await api.post(`/forums/${forum.id}/favorite`, {});
+      const res = await api.post(`/forums/${forum.id}/favorite`);
       setForums(prev => prev.map(f =>
         f.id === forum.id ? { ...f, is_favorite: res.data.is_favorite } : f
       ));
@@ -238,7 +279,7 @@ const ForumScreen = () => {
 
   const navigateToProfile = (userId: number, role: string) => {
     if (role === 'coach') {
-      router.push(`/clients/coach-public-profile?coachId=${userId}`);
+      router.push(`/coachs/coach-public-profile?coachId=${userId}`);
     }
   };
 
@@ -347,7 +388,7 @@ const ForumScreen = () => {
   // List view
   // -------------------------------------------------------------------------
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <View style={styles.tabBar}>
         {(['all', 'favorites', 'mine'] as Tab[]).map(tab => (
           <TouchableOpacity
@@ -429,6 +470,13 @@ const ForumScreen = () => {
               ) : null}
 
               <View style={styles.forumFooter}>
+                {item.topic && (
+                  <View style={[styles.topicBadge, { backgroundColor: (TOPIC_COLORS[item.topic] || '#95A5A6') + '25' }]}>
+                    <Text style={[styles.topicBadgeText, { color: TOPIC_COLORS[item.topic] || '#95A5A6' }]}>
+                      {FORUM_TOPICS.find(t => t.key === item.topic)?.label || item.topic}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.forumMeta}>
                   <Ionicons name="chatbubble-outline" size={14} color="#8A8D91" />
                   <Text style={styles.forumMetaText}>{item.message_count} messages</Text>
@@ -459,13 +507,87 @@ const ForumScreen = () => {
         </View>
       )}
 
-      <TouchableOpacity
-        style={[styles.createBtn, { marginBottom: insets.bottom + 10 }]}
-        onPress={() => setShowCreateModal(true)}
-      >
-        <Ionicons name="add" size={22} color="#2A4562" />
-        <Text style={styles.createBtnText}>New Forum</Text>
-      </TouchableOpacity>
+      {/* Action bar: filter left, New Forum right */}
+      <View style={[styles.actionBar, { marginBottom: 0 }]}>
+        <TouchableOpacity
+          style={[styles.filterBtn, filterTopic && styles.filterBtnActive]}
+          onPress={() => setShowFilterModal(true)}
+        >
+          <Ionicons name="options" size={18} color={filterTopic ? 'white' : '#ccc'} />
+          {filterTopic && (
+            <Text style={styles.filterBtnText} numberOfLines={1}>
+              {FORUM_TOPICS.find(t => t.key === filterTopic)?.label}
+            </Text>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.newForumBtn}
+          onPress={() => setShowCreateModal(true)}
+        >
+          <Ionicons name="add" size={18} color="#2A4562" />
+          <Text style={styles.newForumBtnText}>New Forum</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter modal */}
+      <Modal visible={showFilterModal} animationType="slide" transparent>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowFilterModal(false)}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Filter & Sort</Text>
+
+            <Text style={styles.inputLabel}>Topic</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              <View style={styles.topicChipRow}>
+                <TouchableOpacity
+                  style={[styles.topicChip, !filterTopic && styles.topicChipActive]}
+                  onPress={() => setFilterTopic(null)}
+                >
+                  <Text style={[styles.topicChipText, !filterTopic && styles.topicChipTextActive]}>All</Text>
+                </TouchableOpacity>
+                {FORUM_TOPICS.map(t => (
+                  <TouchableOpacity
+                    key={t.key}
+                    style={[styles.topicChip, filterTopic === t.key && { backgroundColor: TOPIC_COLORS[t.key] }]}
+                    onPress={() => setFilterTopic(filterTopic === t.key ? null : t.key)}
+                  >
+                    <Ionicons name={t.icon as any} size={14} color={filterTopic === t.key ? 'white' : '#ccc'} />
+                    <Text style={[styles.topicChipText, filterTopic === t.key && styles.topicChipTextActive]}>{t.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <Text style={styles.inputLabel}>Sort by</Text>
+            <View style={styles.statusRow}>
+              {([
+                { key: 'recent', label: 'Most Recent' },
+                { key: 'oldest', label: 'Oldest' },
+                { key: 'popular', label: 'Popular' },
+              ] as const).map(s => (
+                <TouchableOpacity
+                  key={s.key}
+                  style={[styles.statusOption, sortBy === s.key && styles.statusOptionActive]}
+                  onPress={() => setSortBy(s.key)}
+                >
+                  <Text style={[styles.statusOptionText, sortBy === s.key && styles.statusOptionTextActive]}>{s.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => { setFilterTopic(null); setSortBy('recent'); setShowFilterModal(false); }}
+              >
+                <Text style={styles.modalCancelText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={() => setShowFilterModal(false)}>
+                <Text style={styles.modalConfirmText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Create modal */}
       <Modal visible={showCreateModal} animationType="slide" transparent>
@@ -492,6 +614,22 @@ const ForumScreen = () => {
               onChangeText={t => setNewDescription(t.slice(0, 500))}
               multiline
             />
+
+            <Text style={styles.inputLabel}>Topic</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4, marginBottom: 4 }}>
+              <View style={styles.topicChipRow}>
+                {FORUM_TOPICS.map(t => (
+                  <TouchableOpacity
+                    key={t.key}
+                    style={[styles.topicChip, newTopic === t.key && { backgroundColor: TOPIC_COLORS[t.key] }]}
+                    onPress={() => setNewTopic(newTopic === t.key ? null : t.key)}
+                  >
+                    <Ionicons name={t.icon as any} size={14} color={newTopic === t.key ? 'white' : '#ccc'} />
+                    <Text style={[styles.topicChipText, newTopic === t.key && styles.topicChipTextActive]}>{t.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
 
             <Text style={styles.inputLabel}>Visibility</Text>
             <View style={styles.statusRow}>
@@ -551,6 +689,22 @@ const ForumScreen = () => {
               multiline
             />
 
+            <Text style={styles.inputLabel}>Topic</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4, marginBottom: 4 }}>
+              <View style={styles.topicChipRow}>
+                {FORUM_TOPICS.map(t => (
+                  <TouchableOpacity
+                    key={t.key}
+                    style={[styles.topicChip, editTopic === t.key && { backgroundColor: TOPIC_COLORS[t.key] }]}
+                    onPress={() => setEditTopic(editTopic === t.key ? null : t.key)}
+                  >
+                    <Ionicons name={t.icon as any} size={14} color={editTopic === t.key ? 'white' : '#ccc'} />
+                    <Text style={[styles.topicChipText, editTopic === t.key && styles.topicChipTextActive]}>{t.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
             <Text style={styles.inputLabel}>Visibility</Text>
             <View style={styles.statusRow}>
               {['public', 'private', 'draft'].map(s => (
@@ -591,11 +745,39 @@ const ForumScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B' },
 
-  tabBar: { flexDirection: 'row', backgroundColor: '#161B22', borderBottomWidth: 1, borderBottomColor: '#222' },
+  tabBar: { flexDirection: 'row', backgroundColor: '#1A1F2B', borderBottomWidth: 1, borderBottomColor: '#222' },
   tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
   tabActive: { borderBottomWidth: 2, borderBottomColor: '#3498DB' },
   tabText: { color: '#8A8D91', fontSize: 13, fontWeight: '500' },
   tabTextActive: { color: '#3498DB' },
+
+  actionBar: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  filterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#2A4562', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  filterBtnActive: { backgroundColor: '#3498DB' },
+  filterBtnText: { color: 'white', fontSize: 12, fontWeight: '600', maxWidth: 80 },
+  newForumBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'white', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8,
+  },
+  newForumBtnText: { color: '#2A4562', fontWeight: 'bold', fontSize: 13 },
+
+  topicChipRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  topicChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#2A4562', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7,
+  },
+  topicChipActive: { backgroundColor: '#3498DB' },
+  topicChipText: { color: '#ccc', fontSize: 12, fontWeight: '500' },
+  topicChipTextActive: { color: 'white' },
+
+  topicBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  topicBadgeText: { fontSize: 11, fontWeight: '600' },
 
   forumCard: { backgroundColor: '#2A4562', borderRadius: 12, padding: 14, marginBottom: 12 },
   forumCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
@@ -627,12 +809,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center', alignItems: 'center',
   },
-  createBtn: {
-    flexDirection: 'row', backgroundColor: 'white', marginHorizontal: 16,
-    borderRadius: 12, paddingVertical: 13, justifyContent: 'center', alignItems: 'center', gap: 8,
-  },
-  createBtnText: { color: '#2A4562', fontWeight: 'bold', fontSize: 15 },
-
   detailHeader: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12,
     backgroundColor: '#161B22', borderBottomWidth: 1, borderBottomColor: '#222', gap: 12,

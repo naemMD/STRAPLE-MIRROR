@@ -85,17 +85,20 @@ def get_food_by_code(code, quantity):
             if data.get("totalNutrients"):
                 nutrients = data.get("totalNutrients", {})
                 
-                sodium_mg = nutrients.get("NA", {}).get("quantity", 0)
+                def nq(key):
+                    return nutrients.get(key, {}).get("quantity") or 0
+
+                sodium_mg = nq("NA")
                 salt_g = (sodium_mg * 2.5) / 1000
 
                 return {
-                    "energy": round(nutrients.get("ENERC_KCAL", {}).get("quantity", 0), 1),
-                    "proteins": round(nutrients.get("PROCNT", {}).get("quantity", 0), 1),
-                    "carbohydrates": round(nutrients.get("CHOCDF", {}).get("quantity", 0), 1),
-                    "sugars": round(nutrients.get("SUGAR", {}).get("quantity", 0), 1),
-                    "lipids": round(nutrients.get("FAT", {}).get("quantity", 0), 1),
-                    "saturated_fats": round(nutrients.get("FASAT", {}).get("quantity", 0), 1),
-                    "fiber": round(nutrients.get("FIBTG", {}).get("quantity", 0), 1),
+                    "energy": round(nq("ENERC_KCAL"), 1),
+                    "proteins": round(nq("PROCNT"), 1),
+                    "carbohydrates": round(nq("CHOCDF"), 1),
+                    "sugars": round(nq("SUGAR"), 1),
+                    "lipids": round(nq("FAT"), 1),
+                    "saturated_fats": round(nq("FASAT"), 1),
+                    "fiber": round(nq("FIBTG"), 1),
                     "salt": round(salt_g, 2)
                 }
             else:
@@ -153,14 +156,14 @@ def scan_food(code, format):
 
             return {
                 "name": product.get("product_name", "Unknown"),
-                "energy": nutriments.get("energy-kcal_100g", 0),
-                "proteins": nutriments.get("proteins_100g", 0),
-                "carbohydrates": nutriments.get("carbohydrates_100g", 0),
-                "sugars": nutriments.get("sugars_100g", 0),
-                "lipids": nutriments.get("fat_100g", 0),
-                "saturated_fats": nutriments.get("saturated-fat_100g", 0),
-                "fiber": nutriments.get("fiber_100g", 0),
-                "salt": nutriments.get("salt_100g", 0)
+                "energy": nutriments.get("energy-kcal_100g") or 0,
+                "proteins": nutriments.get("proteins_100g") or 0,
+                "carbohydrates": nutriments.get("carbohydrates_100g") or 0,
+                "sugars": nutriments.get("sugars_100g") or 0,
+                "lipids": nutriments.get("fat_100g") or 0,
+                "saturated_fats": nutriments.get("saturated-fat_100g") or 0,
+                "fiber": nutriments.get("fiber_100g") or 0,
+                "salt": nutriments.get("salt_100g") or 0
             }
         except ValueError:
             print("Erreur de décodage pour l'URL :", FULL_URL)

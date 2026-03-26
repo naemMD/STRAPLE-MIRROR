@@ -443,7 +443,8 @@ async def get_meals_by_user(session: AsyncSession, user_id: int):
             "total_saturated_fats": meal.total_saturated_fats,
             "total_fiber": meal.total_fiber,
             "total_salt": meal.total_salt,
-            "aliments": meal.aliments
+            "aliments": meal.aliments,
+            "is_consumed": meal.is_consumed,
         })
 
     return JSONResponse(
@@ -470,14 +471,15 @@ async def toggle_meal_consume(session: AsyncSession, meal_id: int, user_id: int)
 # Workouts
 # ---------------------------------------------------------------------------
 
-async def create_full_workout(session: AsyncSession, user_id: int, workout_data: WorkoutCreate):
+async def create_full_workout(session: AsyncSession, user_id: int, workout_data: WorkoutCreate, is_ai_generated: bool = False):
     try:
         new_workout = Workout(
             user_id=user_id,
             name=workout_data.name,
             description=workout_data.description,
             difficulty=workout_data.difficulty,
-            scheduled_date=workout_data.scheduled_date
+            scheduled_date=workout_data.scheduled_date,
+            is_ai_generated=is_ai_generated,
         )
         session.add(new_workout)
 
@@ -1768,6 +1770,7 @@ def _forum_row_to_dict(forum, author, msg_count: int, is_fav: bool) -> dict:
         "user_id": forum.user_id,
         "title": forum.title,
         "description": forum.description,
+        "topic": forum.topic,
         "status": forum.status,
         "created_at": forum.created_at.isoformat() if forum.created_at else None,
         "last_activity_at": forum.last_activity_at.isoformat() if forum.last_activity_at else None,
@@ -1801,6 +1804,7 @@ async def create_forum(session: AsyncSession, user_id: int, forum_data: ForumCre
         user_id=user_id,
         title=forum_data.title,
         description=forum_data.description,
+        topic=forum_data.topic,
         status=forum_data.status,
         last_activity_at=datetime.utcnow(),
     )
@@ -1812,19 +1816,29 @@ async def create_forum(session: AsyncSession, user_id: int, forum_data: ForumCre
     return JSONResponse(status_code=201, content=_forum_row_to_dict(forum, author, 0, False))
 
 
-async def get_public_forums(session: AsyncSession, user_id: int, page: int = 1, page_size: int = 15):
+async def get_public_forums(session: AsyncSession, user_id: int, page: int = 1, page_size: int = 15, topic: str | None = None, sort: str = "recent"):
     offset = (page - 1) * page_size
 
+    filters = [Forum.status == 'public']
+    if topic:
+        filters.append(Forum.topic == topic)
+
     total_res = await session.execute(
-        select(func.count(Forum.id)).where(Forum.status == 'public')
+        select(func.count(Forum.id)).where(*filters)
     )
     total = total_res.scalar() or 0
+
+    order = desc(Forum.last_activity_at)
+    if sort == "oldest":
+        order = asc(Forum.created_at)
+    elif sort == "popular":
+        order = desc(Forum.last_activity_at)
 
     result = await session.execute(
         select(Forum, Users)
         .join(Users, Forum.user_id == Users.id)
-        .where(Forum.status == 'public')
-        .order_by(desc(Forum.last_activity_at))
+        .where(*filters)
+        .order_by(order)
         .offset(offset)
         .limit(page_size)
     )
@@ -1885,6 +1899,7 @@ async def get_forum_with_messages(session: AsyncSession, forum_id: int, user_id:
         "user_id": forum.user_id,
         "title": forum.title,
         "description": forum.description,
+        "topic": forum.topic,
         "status": forum.status,
         "created_at": forum.created_at.isoformat() if forum.created_at else None,
         "last_activity_at": forum.last_activity_at.isoformat() if forum.last_activity_at else None,
@@ -1942,13 +1957,17 @@ async def toggle_forum_favorite(session: AsyncSession, user_id: int, forum_id: i
         return JSONResponse(status_code=200, content={"is_favorite": True})
 
 
-async def get_favorite_forums(session: AsyncSession, user_id: int, page: int = 1, page_size: int = 15):
+async def get_favorite_forums(session: AsyncSession, user_id: int, page: int = 1, page_size: int = 15, topic: str | None = None):
     offset = (page - 1) * page_size
+
+    filters = [ForumFavorite.user_id == user_id, Forum.status == 'public']
+    if topic:
+        filters.append(Forum.topic == topic)
 
     total_res = await session.execute(
         select(func.count(ForumFavorite.id))
         .join(Forum, ForumFavorite.forum_id == Forum.id)
-        .where(ForumFavorite.user_id == user_id, Forum.status == 'public')
+        .where(*filters)
     )
     total = total_res.scalar() or 0
 
@@ -1956,7 +1975,7 @@ async def get_favorite_forums(session: AsyncSession, user_id: int, page: int = 1
         select(Forum, Users)
         .join(ForumFavorite, ForumFavorite.forum_id == Forum.id)
         .join(Users, Forum.user_id == Users.id)
-        .where(ForumFavorite.user_id == user_id, Forum.status == 'public')
+        .where(*filters)
         .order_by(desc(Forum.last_activity_at))
         .offset(offset)
         .limit(page_size)
@@ -1977,18 +1996,22 @@ async def get_favorite_forums(session: AsyncSession, user_id: int, page: int = 1
     })
 
 
-async def get_my_forums(session: AsyncSession, user_id: int, page: int = 1, page_size: int = 15):
+async def get_my_forums(session: AsyncSession, user_id: int, page: int = 1, page_size: int = 15, topic: str | None = None):
     offset = (page - 1) * page_size
 
+    filters = [Forum.user_id == user_id]
+    if topic:
+        filters.append(Forum.topic == topic)
+
     total_res = await session.execute(
-        select(func.count(Forum.id)).where(Forum.user_id == user_id)
+        select(func.count(Forum.id)).where(*filters)
     )
     total = total_res.scalar() or 0
 
     result = await session.execute(
         select(Forum, Users)
         .join(Users, Forum.user_id == Users.id)
-        .where(Forum.user_id == user_id)
+        .where(*filters)
         .order_by(desc(Forum.created_at))
         .offset(offset)
         .limit(page_size)
@@ -2022,6 +2045,8 @@ async def update_forum(session: AsyncSession, forum_id: int, user_id: int, updat
         forum.title = update_data.title
     if update_data.description is not None:
         forum.description = update_data.description
+    if update_data.topic is not None:
+        forum.topic = update_data.topic
     if update_data.status is not None:
         forum.status = update_data.status
 

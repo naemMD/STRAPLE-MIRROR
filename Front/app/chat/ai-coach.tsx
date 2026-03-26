@@ -15,6 +15,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { crossAlert } from '@/services/crossAlert';
+import BodyMap from '@/components/BodyMap';
 import api from '@/services/api';
 
 let SecureStore: any = null;
@@ -51,12 +53,62 @@ const COLOR_OPTIONS = [
   '#FF5722', // Deep Orange
 ];
 
+interface InjuryProposal {
+  body_zone: string;
+  description: string;
+}
+
 interface ChatMessage {
   id: number | string;
   role: 'user' | 'assistant';
   content: string;
   created_at?: string;
+  proposed_injuries?: InjuryProposal[];
+  injury_status?: 'pending' | 'confirmed' | 'declined';
+  show_body_map?: boolean;
 }
+
+interface Injury {
+  id: number;
+  body_zone: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+const BODY_ZONE_LABELS: Record<string, string> = {
+  right_shoulder: 'Right Shoulder',
+  left_shoulder: 'Left Shoulder',
+  right_trapezius: 'Right Trapezius',
+  left_trapezius: 'Left Trapezius',
+  upper_back: 'Upper Back',
+  lower_back: 'Lower Back',
+  neck: 'Neck',
+  right_elbow: 'Right Elbow',
+  left_elbow: 'Left Elbow',
+  right_wrist: 'Right Wrist',
+  left_wrist: 'Left Wrist',
+  chest: 'Chest',
+  abs: 'Abs',
+  right_hip: 'Right Hip',
+  left_hip: 'Left Hip',
+  right_knee: 'Right Knee',
+  left_knee: 'Left Knee',
+  right_ankle: 'Right Ankle',
+  left_ankle: 'Left Ankle',
+  right_foot: 'Right Foot',
+  left_foot: 'Left Foot',
+  right_calf: 'Right Calf',
+  left_calf: 'Left Calf',
+  right_thigh: 'Right Thigh',
+  left_thigh: 'Left Thigh',
+  right_bicep: 'Right Bicep',
+  left_bicep: 'Left Bicep',
+  right_tricep: 'Right Tricep',
+  left_tricep: 'Left Tricep',
+  right_forearm: 'Right Forearm',
+  left_forearm: 'Left Forearm',
+};
 
 const AiCoachScreen = () => {
   const insets = useSafeAreaInsets();
@@ -70,7 +122,15 @@ const AiCoachScreen = () => {
   // Limits
   const [remainingMessages, setRemainingMessages] = useState(DAILY_MESSAGE_LIMIT);
 
-  // Customization state
+  // Injuries state
+  const [injuries, setInjuries] = useState<Injury[]>([]);
+
+  // Body map state
+  const [bodyMapVisible, setBodyMapVisible] = useState(false);
+  const [selectedBodyZones, setSelectedBodyZones] = useState<string[]>([]);
+
+  // Menu & Customization state
+  const [menuVisible, setMenuVisible] = useState(false);
   const [coachName, setCoachName] = useState(DEFAULT_NAME);
   const [accentColor, setAccentColor] = useState(DEFAULT_COLOR);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -80,6 +140,7 @@ const AiCoachScreen = () => {
     loadPreferences();
     loadHistory();
     loadRemaining();
+    loadInjuries();
   }, []);
 
   const loadPreferences = async () => {
@@ -112,10 +173,103 @@ const AiCoachScreen = () => {
     } catch (e) {}
   };
 
+  const loadInjuries = async () => {
+    try {
+      const res = await api.get('/injuries');
+      setInjuries(res.data);
+    } catch (e) {}
+  };
+
+  const removeInjury = async (injuryId: number) => {
+    try {
+      await api.delete(`/injuries/${injuryId}`);
+      setInjuries((prev) => prev.filter((i) => i.id !== injuryId));
+    } catch (e) {
+      console.error('Error removing injury:', e);
+    }
+  };
+
+  const confirmInjuries = async (messageId: number | string, proposals: InjuryProposal[]) => {
+    try {
+      await api.post('/injuries/confirm', { injuries: proposals });
+      await api.patch(`/ai-coach/messages/${messageId}/injury-status`, { injury_status: 'confirmed' });
+      setMessages((prev) =>
+        prev.map((m) => m.id === messageId ? { ...m, injury_status: 'confirmed' as const } : m)
+      );
+      loadInjuries();
+    } catch (e) {
+      console.error('Error confirming injuries:', e);
+    }
+  };
+
+  const declineInjuries = async (messageId: number | string) => {
+    try {
+      await api.patch(`/ai-coach/messages/${messageId}/injury-status`, { injury_status: 'declined' });
+      setMessages((prev) =>
+        prev.map((m) => m.id === messageId ? { ...m, injury_status: 'declined' as const } : m)
+      );
+    } catch (e) {
+      console.error('Error declining injuries:', e);
+    }
+  };
+
+  const clearHistory = () => {
+    crossAlert(
+      'Clear conversation',
+      'Are you sure you want to delete all messages? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete('/ai-coach/history');
+              setMessages([]);
+              loadRemaining();
+            } catch (e) {
+              console.error('Error clearing history:', e);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const openBodyMap = () => {
+    setSelectedBodyZones([]);
+    setBodyMapVisible(true);
+  };
+
+  const handleBodyZoneSelect = (zoneId: string) => {
+    setSelectedBodyZones((prev) =>
+      prev.includes(zoneId) ? prev.filter((z) => z !== zoneId) : [...prev, zoneId]
+    );
+  };
+
+  const handleBodyMapConfirm = () => {
+    if (selectedBodyZones.length === 0) return;
+    const zoneLabels = selectedBodyZones
+      .map((z) => BODY_ZONE_LABELS[z] || z)
+      .join(', ');
+    setBodyMapVisible(false);
+    // Insert the zone info directly into the input for the user to send
+    setInputText(`I have pain in: ${zoneLabels}`);
+  };
+
   const loadHistory = async () => {
     try {
       const res = await api.get('/ai-coach/history');
-      setMessages(res.data.reverse());
+      const loaded: ChatMessage[] = res.data.map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        created_at: m.created_at,
+        proposed_injuries: m.proposed_injuries || undefined,
+        injury_status: m.injury_status || undefined,
+        show_body_map: m.show_body_map || false,
+      }));
+      setMessages(loaded.reverse());
     } catch (error) {
       console.error('Error loading AI chat history:', error);
     } finally {
@@ -141,11 +295,15 @@ const AiCoachScreen = () => {
 
     try {
       const res = await api.post('/ai-coach/chat', { message: userMessage });
+      const proposals = res.data.proposed_injuries || [];
       const aiResponse: ChatMessage = {
         id: res.data.message_id,
         role: 'assistant',
         content: res.data.response,
         created_at: new Date().toISOString(),
+        proposed_injuries: proposals.length > 0 ? proposals : undefined,
+        injury_status: proposals.length > 0 ? 'pending' : undefined,
+        show_body_map: res.data.show_body_map || false,
       };
       setMessages((prev) => [aiResponse, ...prev]);
       setRemainingMessages(res.data.remaining_messages);
@@ -175,6 +333,7 @@ const AiCoachScreen = () => {
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === 'user';
+    const hasProposal = !isUser && item.proposed_injuries && item.proposed_injuries.length > 0;
     return (
       <View style={[styles.messageBubble, isUser ? styles.userMessage : [styles.aiMessage, { borderColor: accentColor + '33' }]]}>
         {!isUser && (
@@ -184,6 +343,63 @@ const AiCoachScreen = () => {
           </View>
         )}
         <Text style={styles.messageText}>{item.content}</Text>
+
+        {/* Body map button (contextual) */}
+        {item.show_body_map && (
+          <TouchableOpacity
+            style={[styles.bodyMapInlineButton, { borderColor: accentColor + '66' }]}
+            onPress={openBodyMap}
+          >
+            <Ionicons name="body-outline" size={20} color={accentColor} />
+            <Text style={[styles.bodyMapInlineText, { color: accentColor }]}>Show body map</Text>
+            <Ionicons name="chevron-forward" size={16} color={accentColor} />
+          </TouchableOpacity>
+        )}
+
+        {/* Injury proposal buttons */}
+        {hasProposal && (
+          <View style={styles.injuryProposalContainer}>
+            <View style={styles.injuryProposalDivider} />
+            <View style={styles.injuryProposalHeader}>
+              <Ionicons name="bandage-outline" size={16} color="#E74C3C" />
+              <Text style={styles.injuryProposalTitle}>Record injury?</Text>
+            </View>
+            {item.proposed_injuries!.map((p, idx) => (
+              <Text key={idx} style={styles.injuryProposalZone}>
+                {BODY_ZONE_LABELS[p.body_zone] || p.body_zone}
+              </Text>
+            ))}
+            {item.injury_status === 'pending' ? (
+              <View style={styles.injuryProposalButtons}>
+                <TouchableOpacity
+                  style={styles.injuryConfirmButton}
+                  onPress={() => confirmInjuries(item.id, item.proposed_injuries!)}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={styles.injuryButtonText}>Confirm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.injuryDeclineButton}
+                  onPress={() => declineInjuries(item.id)}
+                >
+                  <Ionicons name="close-circle" size={18} color="#fff" />
+                  <Text style={styles.injuryButtonText}>Decline</Text>
+                </TouchableOpacity>
+              </View>
+            ) : item.injury_status === 'confirmed' ? (
+              <View style={styles.injuryStatusRow}>
+                <Ionicons name="checkmark-circle" size={16} color="#2ECC71" />
+                <Text style={[styles.injuryStatusText, { color: '#2ECC71' }]}>Injury recorded</Text>
+              </View>
+            ) : (
+              <View style={styles.injuryStatusRow}>
+                <Ionicons name="close-circle" size={16} color="#8A8D91" />
+                <Text style={[styles.injuryStatusText, { color: '#8A8D91' }]}>Declined</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         <Text style={[styles.timeText, { alignSelf: isUser ? 'flex-end' : 'flex-start' }]}>
           {formatTime(item.created_at)}
         </Text>
@@ -215,20 +431,43 @@ const AiCoachScreen = () => {
     >
       <View style={styles.mainContainer}>
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 5 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={{ padding: 5 }}>
+        <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/clients/home')} style={{ padding: 5 }}>
             <Ionicons name="arrow-back" size={28} color={accentColor} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={openSettings} style={{ alignItems: 'center' }}>
-            <View style={styles.headerTitleRow}>
-              <Ionicons name="sparkles" size={18} color={accentColor} style={{ marginRight: 6 }} />
-              <Text style={styles.headerTitle}>{coachName}</Text>
-              <Ionicons name="create-outline" size={14} color="#8A8D91" style={{ marginLeft: 6 }} />
-            </View>
-            <Text style={[styles.headerSubtitle, { color: accentColor }]}>Tap to customize</Text>
+          <View style={styles.headerTitleRow}>
+            <Ionicons name="sparkles" size={18} color={accentColor} style={{ marginRight: 6 }} />
+            <Text style={styles.headerTitle}>{coachName}</Text>
+          </View>
+          <TouchableOpacity onPress={() => setMenuVisible(true)} style={{ padding: 5 }}>
+            <Ionicons name="ellipsis-vertical" size={22} color="#8A8D91" />
           </TouchableOpacity>
-          <View style={{ width: 38 }} />
         </View>
+
+        {/* Injury Banner */}
+        {injuries.length > 0 && (
+          <View style={styles.injuryBanner}>
+            <View style={styles.injuryBannerHeader}>
+              <Ionicons name="bandage-outline" size={16} color="#E74C3C" />
+              <Text style={styles.injuryBannerTitle}>Active injuries</Text>
+            </View>
+            <View style={styles.injuryChipsContainer}>
+              {injuries.map((injury) => (
+                <View key={injury.id} style={styles.injuryChip}>
+                  <Text style={styles.injuryChipText}>
+                    {BODY_ZONE_LABELS[injury.body_zone] || injury.body_zone}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => removeInjury(injury.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#E74C3C" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Messages */}
         <View style={styles.listContainer}>
@@ -319,6 +558,35 @@ const AiCoachScreen = () => {
         )}
       </View>
 
+      {/* Dropdown Menu */}
+      <Modal visible={menuVisible} transparent animationType="fade">
+        <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
+          <View style={[styles.menuDropdown, { top: insets.top + 55 }]}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuVisible(false);
+                openSettings();
+              }}
+            >
+              <Ionicons name="color-palette-outline" size={20} color="#fff" />
+              <Text style={styles.menuItemText}>Customize coach</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuVisible(false);
+                clearHistory();
+              }}
+            >
+              <Ionicons name="trash-outline" size={20} color="#E74C3C" />
+              <Text style={[styles.menuItemText, { color: '#E74C3C' }]}>Clear conversation</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
       {/* Settings Modal */}
       <Modal visible={settingsVisible} transparent animationType="fade">
         <Pressable
@@ -373,6 +641,19 @@ const AiCoachScreen = () => {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Body Map Modal */}
+      <Modal visible={bodyMapVisible} animationType="slide">
+        <View style={styles.bodyMapModal}>
+          <BodyMap
+            selectedZones={selectedBodyZones}
+            onZoneSelect={handleBodyZoneSelect}
+            onConfirm={handleBodyMapConfirm}
+            onCancel={() => setBodyMapVisible(false)}
+            accentColor={accentColor}
+          />
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -392,7 +673,6 @@ const styles = StyleSheet.create({
   },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: 'white' },
-  headerSubtitle: { fontSize: 10 },
   listContainer: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingBottom: 10 },
 
@@ -468,9 +748,9 @@ const styles = StyleSheet.create({
   inputMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 8,
+    paddingTop: 12,
     paddingHorizontal: 4,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   charCount: {
     fontSize: 11,
@@ -506,6 +786,22 @@ const styles = StyleSheet.create({
     height: 40,
     fontSize: 16,
   },
+  bodyMapInlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  bodyMapInlineText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   sendButton: {
     width: 40,
     height: 40,
@@ -513,6 +809,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
+  },
+  bodyMapModal: {
+    flex: 1,
+    backgroundColor: '#1E2C3D',
+    paddingTop: 50,
+  },
+
+  // Dropdown menu
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  menuDropdown: {
+    position: 'absolute',
+    right: 12,
+    backgroundColor: '#232D3F',
+    borderRadius: 14,
+    paddingVertical: 6,
+    minWidth: 200,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+  },
+  menuItemText: {
+    color: '#fff',
+    fontSize: 15,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#2A4562',
+    marginHorizontal: 14,
   },
 
   // Settings modal
@@ -581,6 +917,114 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+
+  // Injury proposal (in-message buttons)
+  injuryProposalContainer: {
+    marginTop: 10,
+  },
+  injuryProposalDivider: {
+    height: 1,
+    backgroundColor: 'rgba(231, 76, 60, 0.2)',
+    marginBottom: 10,
+  },
+  injuryProposalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  injuryProposalTitle: {
+    color: '#E74C3C',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  injuryProposalZone: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 22,
+    marginBottom: 2,
+  },
+  injuryProposalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  injuryConfirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#27AE60',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    gap: 6,
+  },
+  injuryDeclineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#7F8C8D',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    gap: 6,
+  },
+  injuryButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  injuryStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  injuryStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Injury banner
+  injuryBanner: {
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(231, 76, 60, 0.25)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  injuryBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  injuryBannerTitle: {
+    color: '#E74C3C',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  injuryChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  injuryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(231, 76, 60, 0.15)',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingLeft: 10,
+    paddingRight: 6,
+    gap: 6,
+  },
+  injuryChipText: {
+    color: '#E74C3C',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 
