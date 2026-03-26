@@ -99,7 +99,7 @@ export default function ClientLayout() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push("/clients/forum")}>
-              <Ionicons name="people" size={26} color={currentPage === "forum" ? "#3498DB" : "white"} />
+              <Ionicons name="newspaper" size={26} color={currentPage === "forum" ? "#3498DB" : "white"} />
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push("/clients/settings")}>

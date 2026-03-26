@@ -5,13 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.model import *
 from app.database import get_session
 from app.api import *
-from app.schemas import WorkoutCreate, WorkoutRead, WorkoutExerciseCreate, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage, AI_DAILY_MESSAGE_LIMIT, UserInjury, UserInjuryRead, InjuryProposal, InjuryConfirmRequest, GenerateProgramRequest, SaveGeneratedProgramRequest, Users
+from app.schemas import WorkoutCreate, WorkoutRead, WorkoutExerciseCreate, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage, AI_DAILY_MESSAGE_LIMIT, AI_WEEKLY_WORKOUT_LIMIT, AI_DAILY_WORKOUT_LIMIT, UserInjury, UserInjuryRead, InjuryProposal, InjuryConfirmRequest, GenerateProgramRequest, SaveGeneratedProgramRequest, Users, Workout, WorkoutExercise
 from typing import List, Any, Optional
 from jose import JWTError, jwt
 from dotenv import load_dotenv
 from sqlalchemy import select, desc, update, func as sa_func
 from app.ai_coach import generate_ai_response, generate_workout_program
-from datetime import date
+from datetime import date, datetime, timedelta
 import os
 import re
 
@@ -256,6 +256,26 @@ async def generate_program_route(
     available_exercises = [ex.model_dump() for ex in request_data.available_exercises]
     day_configs = [dc.model_dump() for dc in request_data.day_configs] if request_data.day_configs else None
 
+    # Check weekly AI workout limit
+    weekly_used = await _count_ai_workouts_this_week(session, user_id)
+    weekly_remaining = max(0, AI_WEEKLY_WORKOUT_LIMIT - weekly_used)
+    num_requested = len(request_data.selected_dates)
+    if num_requested > weekly_remaining:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Weekly AI workout limit: {weekly_remaining} remaining out of {AI_WEEKLY_WORKOUT_LIMIT}/week."
+        )
+
+    # Check daily limit (max 2 AI workouts per day)
+    for date_str in request_data.selected_dates:
+        target = datetime.strptime(date_str, "%Y-%m-%d").date()
+        daily_count = await _count_ai_workouts_for_date(session, user_id, target)
+        if daily_count >= AI_DAILY_WORKOUT_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily AI limit reached for {date_str} (max {AI_DAILY_WORKOUT_LIMIT}/day)."
+            )
+
     # Call AI to generate program
     try:
         workouts_data = await generate_workout_program(
@@ -325,6 +345,26 @@ async def preview_program_route(
     available_exercises = [ex.model_dump() for ex in request_data.available_exercises]
     day_configs = [dc.model_dump() for dc in request_data.day_configs] if request_data.day_configs else None
 
+    # Check weekly AI workout limit
+    weekly_used = await _count_ai_workouts_this_week(session, user_id)
+    weekly_remaining = max(0, AI_WEEKLY_WORKOUT_LIMIT - weekly_used)
+    num_requested = len(request_data.selected_dates)
+    if num_requested > weekly_remaining:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Weekly AI workout limit: {weekly_remaining} remaining out of {AI_WEEKLY_WORKOUT_LIMIT}/week."
+        )
+
+    # Check daily limit
+    for date_str in request_data.selected_dates:
+        target = datetime.strptime(date_str, "%Y-%m-%d").date()
+        daily_count = await _count_ai_workouts_for_date(session, user_id, target)
+        if daily_count >= AI_DAILY_WORKOUT_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily AI limit reached for {date_str} (max {AI_DAILY_WORKOUT_LIMIT}/day)."
+            )
+
     try:
         workouts_data = await generate_workout_program(
             selected_dates=request_data.selected_dates,
@@ -336,7 +376,7 @@ async def preview_program_route(
         print(f"[AI Program] Error generating preview: {e}")
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
 
-    return {"workouts": workouts_data}
+    return {"workouts": workouts_data, "ai_workouts_remaining": weekly_remaining}
 
 
 @router.post("/workouts/save-generated-program")
@@ -346,6 +386,16 @@ async def save_generated_program_route(
     session: AsyncSession = Depends(get_session),
 ):
     """Save previously previewed AI-generated workouts."""
+    # Check weekly AI workout limit before saving
+    weekly_used = await _count_ai_workouts_this_week(session, user_id)
+    weekly_remaining = max(0, AI_WEEKLY_WORKOUT_LIMIT - weekly_used)
+    total_new = len(request_data.workouts)
+    if total_new > weekly_remaining:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Cannot save: {total_new} workouts would exceed weekly limit ({weekly_remaining} remaining out of {AI_WEEKLY_WORKOUT_LIMIT})."
+        )
+
     count = 0
     for workout in request_data.workouts:
         try:
@@ -372,6 +422,62 @@ async def save_generated_program_route(
             continue
 
     return {"message": f"Saved {count} workouts", "count": count}
+
+
+# ---------------------------------------------------------------------------
+# AI weekly / daily workout limit
+# ---------------------------------------------------------------------------
+
+async def _count_ai_workouts_this_week(session: AsyncSession, user_id: int) -> int:
+    """Count AI-generated workouts for the current week (Mon-Sun)."""
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    start = datetime.combine(monday, datetime.min.time())
+    end = datetime.combine(sunday, datetime.max.time())
+
+    result = await session.execute(
+        select(sa_func.count(Workout.id))
+        .where(
+            Workout.user_id == user_id,
+            Workout.is_ai_generated == True,
+            Workout.scheduled_date >= start,
+            Workout.scheduled_date <= end,
+        )
+    )
+    return result.scalar() or 0
+
+
+async def _count_ai_workouts_for_date(session: AsyncSession, user_id: int, target_date: date) -> int:
+    """Count AI-generated workouts for a specific date."""
+    start = datetime.combine(target_date, datetime.min.time())
+    end = datetime.combine(target_date, datetime.max.time())
+
+    result = await session.execute(
+        select(sa_func.count(Workout.id))
+        .where(
+            Workout.user_id == user_id,
+            Workout.is_ai_generated == True,
+            Workout.scheduled_date >= start,
+            Workout.scheduled_date <= end,
+        )
+    )
+    return result.scalar() or 0
+
+
+@router.get("/workouts/ai-remaining")
+async def get_ai_remaining(
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return how many AI workouts the user can still generate this week."""
+    used = await _count_ai_workouts_this_week(session, user_id)
+    return {
+        "used": used,
+        "weekly_limit": AI_WEEKLY_WORKOUT_LIMIT,
+        "daily_limit": AI_DAILY_WORKOUT_LIMIT,
+        "remaining": max(0, AI_WEEKLY_WORKOUT_LIMIT - used),
+    }
 
 
 # ---------------------------------------------------------------------------

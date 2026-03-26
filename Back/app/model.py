@@ -910,6 +910,7 @@ async def get_client_details(session: AsyncSession, client_id: int, target_date:
                 "id": w.id,
                 "name": w.name,
                 "is_completed": w.is_completed,
+                "is_ai_generated": w.is_ai_generated,
                 "difficulty": w.difficulty,
                 "exercises": [
                     {
@@ -1129,6 +1130,7 @@ async def get_client_details_full(session: AsyncSession, client_id: int, target_
                 "id": w.id,
                 "name": w.name,
                 "is_completed": w.is_completed,
+                "is_ai_generated": w.is_ai_generated,
                 "exercises": [
                     {
                         "name": exo.name,

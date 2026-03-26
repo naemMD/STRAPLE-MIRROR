@@ -646,7 +646,14 @@ const ClientDetailsScreen = () => {
                                 <TouchableOpacity style={{flex: 1, flexDirection: 'row', alignItems: 'center'}} onPress={() => toggleWorkoutExpand(workout.id)}>
                                     <Ionicons name={workout.is_completed ? "checkmark-circle" : "time-outline"} size={22} color={workout.is_completed ? "#2ecc71" : "#888"} style={{marginRight: 10}} />
                                     <View style={{flex: 1}}>
-                                        <Text style={[styles.listName, workout.is_completed && styles.completedText]}>{workout.name}</Text>
+                                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                            <Text style={[styles.listName, workout.is_completed && styles.completedText]}>{workout.name}</Text>
+                                            {workout.is_ai_generated && (
+                                                <View style={{backgroundColor: '#f39c12', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1}}>
+                                                    <Text style={{color: '#fff', fontSize: 9, fontWeight: 'bold'}}>AI</Text>
+                                                </View>
+                                            )}
+                                        </View>
                                         <Text style={{color: workout.is_completed ? '#2ecc71' : '#888', fontSize: 12, marginTop: 2}}>
                                             {workout.is_completed ? 'Done' : 'Pending'}
                                         </Text>
@@ -688,19 +695,22 @@ const ClientDetailsScreen = () => {
                     <Text style={styles.modalTitle}>{editingMealId ? "Edit Meal" : "Create Meal"}</Text>
                     <TextInput style={styles.inputModal} placeholder="Meal Name (e.g. Lunch)" placeholderTextColor="#888" value={mealName} onChangeText={setMealName} />
                     
-                    <Text style={styles.inputLabelModal}>Add Food (Enter Weight first!)</Text>
+                    <Text style={styles.inputLabelModal}>Add Food</Text>
                     <Text style={{color: '#8A8D91', fontSize: 11, fontStyle: 'italic', marginBottom: 6}}>Search in any language (e.g. "poulet", "chicken", "pollo")</Text>
-                    <View style={styles.searchRow}>
+                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8}}>
+                        <Text style={{color: '#aaa', fontSize: 12}}>Weight</Text>
                         <TextInput
-                            style={[styles.inputModal, {width: 80, textAlign:'center', marginBottom: 0}]}
+                            style={[styles.inputModal, {width: 60, textAlign:'center', marginBottom: 0, paddingVertical: 8, fontSize: 14}]}
                             placeholder="g"
                             keyboardType="numeric"
                             value={foodSearchWeight}
                             onChangeText={setFoodSearchWeight}
                             placeholderTextColor="#888"
                         />
+                    </View>
+                    <View style={styles.searchRow}>
                         <TextInput
-                            style={[styles.inputModal, {flex: 1, marginLeft: 10, marginBottom: 0}]}
+                            style={[styles.inputModal, {flex: 1, marginBottom: 0, paddingVertical: 8, fontSize: 14}]}
                             placeholder="Search food..."
                             placeholderTextColor="#888"
                             value={foodSearchQuery}
@@ -708,10 +718,10 @@ const ClientDetailsScreen = () => {
                             onSubmitEditing={searchFoodApi}
                         />
                         <TouchableOpacity style={styles.searchBtn} onPress={searchFoodApi}>
-                            {searchingFood ? <ActivityIndicator size="small" color="white"/> : <Ionicons name="search" size={20} color="white" />}
+                            {searchingFood ? <ActivityIndicator size="small" color="white"/> : <Ionicons name="search" size={18} color="white" />}
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.scanBtn} onPress={openCameraModal}>
-                            <Ionicons name="barcode-outline" size={20} color="white" />
+                            <Ionicons name="barcode-outline" size={18} color="white" />
                         </TouchableOpacity>
                     </View>
                     
@@ -1122,9 +1132,9 @@ const styles = StyleSheet.create({
   inputLabelModal: { color: '#aaa', marginBottom: 8, fontSize: 13, fontWeight: 'bold' },
   inputModal: { backgroundColor: '#2A4562', color: 'white', padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 10 },
   
-  searchRow: { flexDirection: 'row', gap: 10, marginBottom: 15 },
-  searchBtn: { backgroundColor: '#3498DB', padding: 12, borderRadius: 8, justifyContent: 'center' },
-  scanBtn: { backgroundColor: '#9b59b6', padding: 12, borderRadius: 8, justifyContent: 'center' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  searchBtn: { backgroundColor: '#3498DB', padding: 8, borderRadius: 8, justifyContent: 'center', width: 36, height: 36, alignItems: 'center' },
+  scanBtn: { backgroundColor: '#9b59b6', padding: 8, borderRadius: 8, justifyContent: 'center', width: 36, height: 36, alignItems: 'center' },
   resultsBox: { backgroundColor: '#1E2C3D', borderRadius: 8, padding: 5, maxHeight: 150, marginBottom: 10 },
   resultItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: '#333' },
   resultImage: { width: 30, height: 30, borderRadius: 15, marginRight: 10 },

@@ -50,6 +50,10 @@ const TrainingDashboard = () => {
   const [previewWorkouts, setPreviewWorkouts] = useState<any[]>([]);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [savingProgram, setSavingProgram] = useState(false);
+  const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null);
+  const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
+  const [aiRemaining, setAiRemaining] = useState<number | null>(null);
+  const AI_WEEKLY_LIMIT = 14;
 
   const FOCUS_OPTIONS = injuries.length > 0
     ? ['Adapted Full Body', 'Upper Body', 'Lower Body', 'Push', 'Pull', 'Core', 'Cardio']
@@ -94,6 +98,7 @@ const TrainingDashboard = () => {
     useCallback(() => {
       fetchWorkouts();
       fetchInjuries();
+      fetchAiRemaining();
     }, [])
   );
 
@@ -133,6 +138,15 @@ const TrainingDashboard = () => {
     }
   };
 
+  const fetchAiRemaining = async () => {
+    try {
+      const res = await api.get('/workouts/ai-remaining');
+      setAiRemaining(res.data.remaining);
+    } catch (error) {
+      console.log("Error fetching AI remaining:", error);
+    }
+  };
+
   const getNext7Days = () => {
     const days = [];
     const today = new Date();
@@ -148,6 +162,10 @@ const TrainingDashboard = () => {
   };
 
   const openAiModal = () => {
+    if (aiRemaining !== null && aiRemaining <= 0) {
+      crossAlert("Weekly Limit Reached", `You've used all ${AI_WEEKLY_LIMIT} AI workouts for this week. Try again next week!`);
+      return;
+    }
     setDayPrefs({});
     setAiModalVisible(true);
   };
@@ -209,11 +227,17 @@ const TrainingDashboard = () => {
       });
 
       setPreviewWorkouts(res.data.workouts || []);
+      setCollapsedDays(new Set());
       setAiModalVisible(false);
       setPreviewModalVisible(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating program:", error);
-      crossAlert("Error", "Could not generate program. Please try again.");
+      if (error?.response?.status === 429) {
+        crossAlert("Weekly Limit Reached", error.response.data?.detail || "AI exercise limit reached for this week.");
+        fetchAiRemaining();
+      } else {
+        crossAlert("Error", "Could not generate program. Please try again.");
+      }
     } finally {
       setGenerating(false);
     }
@@ -228,10 +252,16 @@ const TrainingDashboard = () => {
       setPreviewModalVisible(false);
       setPreviewWorkouts([]);
       fetchWorkouts();
+      fetchAiRemaining();
       crossAlert("Success", "Your AI training program has been saved!");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving program:", error);
-      crossAlert("Error", "Could not save program. Please try again.");
+      if (error?.response?.status === 429) {
+        crossAlert("Weekly Limit Reached", error.response.data?.detail || "AI workout limit reached for this week.");
+        fetchAiRemaining();
+      } else {
+        crossAlert("Error", "Could not save program. Please try again.");
+      }
     } finally {
       setSavingProgram(false);
     }
@@ -240,6 +270,48 @@ const TrainingDashboard = () => {
   const handleRejectProgram = () => {
     setPreviewModalVisible(false);
     setPreviewWorkouts([]);
+  };
+
+  const handleRegenerateDay = async (workoutIdx: number) => {
+    const workout = previewWorkouts[workoutIdx];
+    if (!workout) return;
+
+    setRegeneratingDay(workoutIdx);
+    try {
+      const userDetails = await getUserDetails();
+      const injuredZones = injuries.map((inj: any) => inj.body_zone);
+      const safeExercises = getSafeExercises(injuredZones);
+      const fitnessLevel = userDetails?.fitness_level || 'intermediate';
+      const levels = ['beginner', 'intermediate', 'advanced'];
+      const filtered = safeExercises.filter(
+        ex => levels.indexOf(ex.difficulty) <= levels.indexOf(fitnessLevel as any)
+      );
+      const exerciseList = filtered.map(ex => ({
+        name: ex.name, muscle: ex.muscle, type: ex.type, difficulty: ex.difficulty,
+      }));
+
+      const dateStr = workout.scheduled_date.split('T')[0];
+      const pref = dayPrefs[dateStr];
+      const dayConfig = pref
+        ? { date: dateStr, focus: pref.focus, mode: pref.mode }
+        : { date: dateStr, focus: 'Full Body', mode: 'progressive' };
+
+      const res = await api.post('/workouts/preview-program', {
+        selected_dates: [dateStr],
+        available_exercises: exerciseList,
+        day_configs: [dayConfig],
+      });
+
+      const newDayWorkouts = res.data.workouts || [];
+      if (newDayWorkouts.length > 0) {
+        setPreviewWorkouts(prev => prev.map((w, i) => i === workoutIdx ? newDayWorkouts[0] : w));
+      }
+    } catch (error) {
+      console.error("Error regenerating day:", error);
+      crossAlert("Error", "Could not regenerate this day. Please try again.");
+    } finally {
+      setRegeneratingDay(null);
+    }
   };
 
   const handleToggleWorkout = async (workoutId: number) => {
@@ -278,6 +350,31 @@ const TrainingDashboard = () => {
                 }
             }
         ]
+    );
+  };
+
+  const handleDeleteAllDayWorkouts = () => {
+    const dayWorkouts = workouts.filter(w => w.scheduled_date.startsWith(selectedDate));
+    if (dayWorkouts.length === 0) return;
+    crossAlert(
+      "Delete All Workouts",
+      `Delete all ${dayWorkouts.length} workout${dayWorkouts.length > 1 ? 's' : ''} for this day?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await Promise.all(dayWorkouts.map(w => api.delete(`/workouts/${w.id}`)));
+              fetchWorkouts();
+              fetchAiRemaining();
+            } catch (error) {
+              crossAlert("Error", "Could not delete all workouts.");
+            }
+          }
+        }
+      ]
     );
   };
 
@@ -547,6 +644,12 @@ const TrainingDashboard = () => {
                   <Ionicons name="add" size={16} color="white" />
                   <Text style={styles.sheetBtnText}>New Training</Text>
                 </TouchableOpacity>
+                {dailyWorkouts.length > 0 && (
+                  <TouchableOpacity style={styles.sheetBtnDelete} onPress={handleDeleteAllDayWorkouts}>
+                    <Ionicons name="trash-outline" size={16} color="white" />
+                    <Text style={styles.sheetBtnText}>Clear Day</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
@@ -734,6 +837,14 @@ const TrainingDashboard = () => {
               Select the days you want to train this week. The AI will generate personalized workouts based on your profile, goals, and fitness level.
             </Text>
 
+            {aiRemaining !== null && (
+              <View style={{backgroundColor: aiRemaining <= 3 ? '#2d1a1a' : '#1a2d1a', borderRadius: 8, padding: 10, marginBottom: 12}}>
+                <Text style={{color: aiRemaining <= 3 ? '#e74c3c' : '#2ecc71', fontSize: 13, fontWeight: 'bold'}}>
+                  {aiRemaining} / {AI_WEEKLY_LIMIT} AI workouts remaining this week (max 2/day)
+                </Text>
+              </View>
+            )}
+
             <ScrollView style={{maxHeight: 400}} showsVerticalScrollIndicator={false}>
               {getNext7Days().map((day) => {
                 const pref = dayPrefs[day.date];
@@ -759,7 +870,7 @@ const TrainingDashboard = () => {
                       <View style={styles.aiDayOptions}>
                         {/* Focus selector */}
                         <Text style={styles.aiOptionLabel}>Focus</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 8}}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
                           {FOCUS_OPTIONS.map(f => (
                             <TouchableOpacity
                               key={f}
@@ -772,8 +883,8 @@ const TrainingDashboard = () => {
                         </ScrollView>
 
                         {/* Mode selector */}
-                        <Text style={styles.aiOptionLabel}>Load Mode</Text>
-                        <View style={{flexDirection: 'row', gap: 6}}>
+                        <Text style={[styles.aiOptionLabel, {marginBottom: 8}]}>Load Mode</Text>
+                        <View style={{flexDirection: 'row', gap: 4}}>
                           {MODE_OPTIONS.map(m => (
                             <TouchableOpacity
                               key={m.key}
@@ -812,68 +923,108 @@ const TrainingDashboard = () => {
 
       {/* AI Program Preview / Validation Modal */}
       <Modal visible={previewModalVisible} animationType="slide" transparent onRequestClose={() => !savingProgram && setPreviewModalVisible(false)}>
-        <Pressable style={styles.modalBackground} onPress={() => !savingProgram && setPreviewModalVisible(false)}>
-          <Pressable style={styles.previewModalContainer} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.previewBackground}>
+          <View style={styles.previewModalContainer}>
             <View style={styles.previewHeader}>
-              <Ionicons name="sparkles" size={24} color="#f39c12" />
+              <Ionicons name="sparkles" size={20} color="#f39c12" />
               <Text style={styles.previewTitle}>Review Your Program</Text>
               <TouchableOpacity onPress={() => !savingProgram && handleRejectProgram()}>
-                <Ionicons name="close-circle" size={28} color="#666" />
+                <Ionicons name="close-circle" size={26} color="#666" />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.previewSubtitle}>
-              The AI has generated {previewWorkouts.length} workout{previewWorkouts.length > 1 ? 's' : ''} for you. Review the details below before confirming.
+              {previewWorkouts.length} workout{previewWorkouts.length > 1 ? 's' : ''} generated. Review and confirm.
             </Text>
 
-            <ScrollView style={{maxHeight: '70%'}} showsVerticalScrollIndicator={false}>
+            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true}>
               {previewWorkouts.map((workout: any, wIdx: number) => {
                 const dateLabel = new Date(workout.scheduled_date).toLocaleDateString('en-US', {
-                  weekday: 'long', month: 'short', day: 'numeric'
+                  weekday: 'short', month: 'short', day: 'numeric'
                 });
                 const exercises = workout.exercises || [];
+                const isRegenerating = regeneratingDay === wIdx;
+                const isCollapsed = collapsedDays.has(wIdx);
                 return (
                   <View key={wIdx} style={styles.previewCard}>
-                    <View style={styles.previewCardHeader}>
-                      <View style={{flex: 1}}>
-                        <Text style={styles.previewCardDate}>{dateLabel}</Text>
-                        <Text style={styles.previewCardName}>{workout.name}</Text>
-                      </View>
-                      <View style={styles.previewBadge}>
-                        <Text style={styles.previewBadgeText}>{workout.difficulty}</Text>
-                      </View>
-                    </View>
-
-                    {workout.description && (
-                      <View style={styles.previewDescriptionBox}>
-                        <Ionicons name="bulb-outline" size={14} color="#f39c12" />
-                        <Text style={styles.previewDescriptionText}>{workout.description}</Text>
-                      </View>
-                    )}
-
-                    <View style={styles.previewExercisesList}>
-                      {exercises.map((ex: any, eIdx: number) => {
-                        const sets = ex.sets_details || [];
-                        const isDur = sets.length > 0 && sets[0].duration > 0 && (!sets[0].reps || sets[0].reps === 0);
-                        return (
-                          <View key={eIdx} style={styles.previewExoRow}>
-                            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
-                              <Text style={styles.previewExoName}>{eIdx + 1}. {ex.name}</Text>
-                              <View style={styles.previewMuscleBadge}>
-                                <Text style={styles.previewMuscleText}>{ex.muscle}</Text>
-                              </View>
-                            </View>
-                            <Text style={styles.previewExoDetails}>
-                              {sets.length} set{sets.length > 1 ? 's' : ''} • {
-                                isDur
-                                  ? sets.map((s: any) => `${s.duration}s`).join(' / ')
-                                  : sets.map((s: any) => `${s.reps} reps${s.weight ? ` @ ${s.weight}kg` : ''}`).join(' / ')
-                              }
-                            </Text>
-                          </View>
-                        );
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setCollapsedDays(prev => {
+                        const next = new Set(prev);
+                        next.has(wIdx) ? next.delete(wIdx) : next.add(wIdx);
+                        return next;
                       })}
-                    </View>
+                    >
+                      <View style={styles.previewCardHeader}>
+                        <View style={{flex: 1}}>
+                          <Text style={styles.previewCardDate}>{dateLabel}</Text>
+                          <Text style={styles.previewCardName}>{workout.name}</Text>
+                        </View>
+                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                          <View style={styles.previewBadge}>
+                            <Text style={styles.previewBadgeText}>{exercises.length} exo</Text>
+                          </View>
+                          <Ionicons name={isCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#888" />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {!isCollapsed && (
+                      <>
+                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6}}>
+                          <View style={styles.previewBadge}>
+                            <Text style={styles.previewBadgeText}>{workout.difficulty}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleRegenerateDay(wIdx)}
+                            disabled={isRegenerating || savingProgram}
+                            style={{flexDirection: 'row', alignItems: 'center', gap: 4, padding: 3}}
+                          >
+                            {isRegenerating
+                              ? <ActivityIndicator size="small" color="#f39c12" />
+                              : <><Ionicons name="refresh" size={14} color="#f39c12" /><Text style={{color: '#f39c12', fontSize: 10, fontWeight: 'bold'}}>Regenerate</Text></>
+                            }
+                          </TouchableOpacity>
+                        </View>
+
+                        {workout.description && (
+                          <View style={styles.previewDescriptionBox}>
+                            <Ionicons name="bulb-outline" size={12} color="#f39c12" />
+                            <Text style={styles.previewDescriptionText}>{workout.description}</Text>
+                          </View>
+                        )}
+
+                        <View style={styles.previewExercisesList}>
+                          {exercises.map((ex: any, eIdx: number) => {
+                            const sets = ex.sets_details || [];
+                            const isDur = sets.length > 0 && sets[0].duration > 0 && (!sets[0].reps || sets[0].reps === 0);
+                            return (
+                              <View key={eIdx} style={styles.previewExoRow}>
+                                <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3}}>
+                                  <Text style={styles.previewExoName}>{eIdx + 1}. {ex.name}</Text>
+                                  <View style={styles.previewMuscleBadge}>
+                                    <Text style={styles.previewMuscleText}>{ex.muscle}</Text>
+                                  </View>
+                                </View>
+                                <View style={styles.previewSetsColumn}>
+                                  {sets.map((s: any, sIdx: number) => (
+                                    <View key={sIdx} style={styles.previewSetRow}>
+                                      <Text style={styles.previewSetLabel}>Set {s.set_number || sIdx + 1}</Text>
+                                      <Text style={styles.previewSetValue}>
+                                        {isDur ? `${s.duration}s` : `${s.reps} reps`}
+                                      </Text>
+                                      {!isDur && s.weight > 0 && (
+                                        <Text style={styles.previewSetWeight}>{s.weight} kg</Text>
+                                      )}
+                                    </View>
+                                  ))}
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )}
                   </View>
                 );
               })}
@@ -881,7 +1032,7 @@ const TrainingDashboard = () => {
 
             <View style={styles.previewButtons}>
               <TouchableOpacity style={styles.previewRejectBtn} onPress={handleRejectProgram} disabled={savingProgram}>
-                <Ionicons name="close" size={20} color="#e74c3c" />
+                <Ionicons name="close" size={18} color="#e74c3c" />
                 <Text style={styles.previewRejectText}>Reject</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.previewAcceptBtn} onPress={handleAcceptProgram} disabled={savingProgram}>
@@ -889,14 +1040,14 @@ const TrainingDashboard = () => {
                   <ActivityIndicator color="white" />
                 ) : (
                   <>
-                    <Ionicons name="checkmark" size={20} color="white" />
+                    <Ionicons name="checkmark" size={18} color="white" />
                     <Text style={styles.previewAcceptText}>Accept & Save</Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
     </View>
@@ -933,11 +1084,12 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', marginTop: 40 },
   emptyText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   emptySubText: { color: '#666', fontSize: 14 },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  sheetHeaderBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sheetHeader: { marginBottom: 15 },
+  sheetHeaderBtns: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' },
   sheetBtnAi: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f39c12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 5 },
   sheetBtnText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
   sheetBtnAdd: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3498DB', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 5 },
+  sheetBtnDelete: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e74c3c', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 5 },
   
   modalBackground: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
   modalContainer: { backgroundColor: '#1A1F2B', borderRadius: 15, padding: 20, maxHeight: '85%', borderWidth: 1, borderColor: '#3498DB' },
@@ -974,52 +1126,57 @@ const styles = StyleSheet.create({
   addExoModalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderColor: '#2A4562', alignItems: 'center' },
   addExoModalItem: { padding: 20, borderBottomWidth: 1, borderColor: '#2A4562', flexDirection: 'row', justifyContent: 'space-between' },
 
-  aiModalContainer: { backgroundColor: '#1A1F2B', borderRadius: 20, padding: 20, marginHorizontal: 10, borderWidth: 1, borderColor: '#f39c12' },
+  aiModalContainer: { backgroundColor: '#1A1F2B', borderRadius: 20, padding: 14, marginHorizontal: 6, borderWidth: 1, borderColor: '#f39c12' },
   aiModalHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   aiModalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', flex: 1 },
   aiModalSubtitle: { color: '#888', fontSize: 13, marginBottom: 15, lineHeight: 18 },
   aiDayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 10, borderRadius: 10 },
   aiDayRowSelected: { backgroundColor: 'rgba(243, 156, 18, 0.1)' },
   aiDayText: { color: 'white', fontSize: 16 },
-  aiDayOptions: { paddingHorizontal: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  aiDayOptions: { paddingHorizontal: 2, paddingTop: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
   aiOptionLabel: { color: '#888', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
-  aiChip: { backgroundColor: '#232D3F', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 6 },
+  aiChip: { backgroundColor: '#232D3F', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, marginRight: 6 },
   aiChipActive: { backgroundColor: 'rgba(243, 156, 18, 0.2)', borderWidth: 1, borderColor: '#f39c12' },
-  aiChipText: { color: '#888', fontSize: 12, fontWeight: '600' },
+  aiChipText: { color: '#888', fontSize: 13, fontWeight: '600' },
   aiChipTextActive: { color: '#f39c12' },
-  aiModeBtn: { flex: 1, backgroundColor: '#232D3F', padding: 8, borderRadius: 8, alignItems: 'center' },
+  aiModeBtn: { flex: 1, backgroundColor: '#232D3F', paddingVertical: 10, paddingHorizontal: 6, borderRadius: 8, alignItems: 'center' },
   aiModeBtnActive: { backgroundColor: 'rgba(243, 156, 18, 0.15)', borderWidth: 1, borderColor: '#f39c12' },
   aiModeBtnText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginBottom: 2 },
   aiModeBtnDesc: { color: '#666', fontSize: 9, textAlign: 'center' },
   aiGenerateBtn: { backgroundColor: '#f39c12', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 15 },
 
-  previewModalContainer: { backgroundColor: '#1A1F2B', borderRadius: 20, padding: 20, marginHorizontal: 10, borderWidth: 1, borderColor: '#f39c12', maxHeight: '90%' },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  previewTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', flex: 1 },
-  previewSubtitle: { color: '#888', fontSize: 13, marginBottom: 15, lineHeight: 18 },
+  previewBackground: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', paddingHorizontal: 14, justifyContent: 'center' },
+  previewModalContainer: { backgroundColor: '#1A1F2B', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#f39c12', maxHeight: '75%' },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  previewTitle: { color: 'white', fontSize: 16, fontWeight: 'bold', flex: 1 },
+  previewSubtitle: { color: '#888', fontSize: 11, marginBottom: 8 },
 
-  previewCard: { backgroundColor: '#232D3F', borderRadius: 12, padding: 14, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#f39c12' },
-  previewCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  previewCardDate: { color: '#f39c12', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  previewCardName: { color: 'white', fontSize: 16, fontWeight: 'bold', marginTop: 2 },
-  previewBadge: { backgroundColor: 'rgba(243, 156, 18, 0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  previewBadgeText: { color: '#f39c12', fontSize: 11, fontWeight: 'bold' },
+  previewCard: { backgroundColor: '#232D3F', borderRadius: 10, padding: 10, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#f39c12' },
+  previewCardHeader: { flexDirection: 'row', alignItems: 'center' },
+  previewCardDate: { color: '#f39c12', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  previewCardName: { color: 'white', fontSize: 13, fontWeight: 'bold', marginTop: 1 },
+  previewBadge: { backgroundColor: 'rgba(243, 156, 18, 0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  previewBadgeText: { color: '#f39c12', fontSize: 9, fontWeight: 'bold' },
 
-  previewDescriptionBox: { flexDirection: 'row', backgroundColor: 'rgba(243, 156, 18, 0.08)', borderRadius: 8, padding: 10, marginBottom: 10, gap: 8, alignItems: 'flex-start' },
-  previewDescriptionText: { color: 'rgba(255,255,255,0.75)', fontSize: 12, lineHeight: 17, flex: 1 },
+  previewDescriptionBox: { flexDirection: 'row', backgroundColor: 'rgba(243, 156, 18, 0.08)', borderRadius: 6, padding: 6, marginBottom: 6, gap: 5, alignItems: 'flex-start' },
+  previewDescriptionText: { color: 'rgba(255,255,255,0.7)', fontSize: 10, lineHeight: 14, flex: 1 },
 
-  previewExercisesList: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8 },
-  previewExoRow: { paddingVertical: 6 },
-  previewExoName: { color: 'white', fontSize: 14, fontWeight: '600', marginRight: 8 },
-  previewMuscleBadge: { backgroundColor: '#2A4562', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  previewMuscleText: { color: '#3498DB', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' },
-  previewExoDetails: { color: '#888', fontSize: 12, marginTop: 2 },
+  previewExercisesList: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 5 },
+  previewExoRow: { paddingVertical: 4 },
+  previewExoName: { color: 'white', fontSize: 12, fontWeight: '600', flex: 1 },
+  previewMuscleBadge: { backgroundColor: '#2A4562', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  previewMuscleText: { color: '#3498DB', fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' },
+  previewSetsColumn: { gap: 3, marginTop: 4, marginLeft: 10, alignItems: 'flex-start' },
+  previewSetRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A2535', borderRadius: 5, paddingHorizontal: 8, paddingVertical: 4, gap: 8, width: 170 },
+  previewSetLabel: { color: '#f39c12', fontSize: 11, fontWeight: 'bold', width: 32 },
+  previewSetValue: { color: '#ccc', fontSize: 11, flex: 1 },
+  previewSetWeight: { color: '#888', fontSize: 11 },
 
-  previewButtons: { flexDirection: 'row', gap: 10, marginTop: 15 },
-  previewRejectBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.1)' },
-  previewRejectText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 15 },
-  previewAcceptBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 12, backgroundColor: '#2ecc71' },
-  previewAcceptText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
+  previewButtons: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  previewRejectBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.1)' },
+  previewRejectText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 13 },
+  previewAcceptBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: 10, backgroundColor: '#2ecc71' },
+  previewAcceptText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
 });
 
 export default TrainingDashboard;

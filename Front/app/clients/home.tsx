@@ -731,19 +731,22 @@ const HomeScreen = () => {
                  )}
 
 
-                <Text style={styles.inputLabelModal}>Add Food (Enter Weight first!)</Text>
+                <Text style={styles.inputLabelModal}>Add Food</Text>
                 <Text style={{color: '#8A8D91', fontSize: 11, fontStyle: 'italic', marginBottom: 6}}>Search in any language (e.g. "poulet", "chicken", "pollo")</Text>
-                <View style={styles.searchRowNew}>
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8}}>
+                    <Text style={{color: '#aaa', fontSize: 12}}>Weight</Text>
                     <TextInput
-                        style={[styles.inputModal, {width: 80, textAlign:'center', marginBottom: 0}]}
+                        style={[styles.inputModal, {width: 60, textAlign:'center', marginBottom: 0, paddingVertical: 8, fontSize: 14}]}
                         placeholder="g"
                         keyboardType="numeric"
                         value={searchWeight}
                         onChangeText={setSearchWeight}
                         placeholderTextColor="#888"
                     />
+                </View>
+                <View style={styles.searchRowNew}>
                     <TextInput
-                        style={[styles.inputModal, {flex: 1, marginLeft: 10, marginBottom: 0}]}
+                        style={[styles.inputModal, {flex: 1, marginBottom: 0, paddingVertical: 8, fontSize: 14}]}
                         placeholder="Search food..."
                         placeholderTextColor="#888"
                         value={search}
@@ -751,10 +754,10 @@ const HomeScreen = () => {
                         onSubmitEditing={searchFood}
                     />
                     <TouchableOpacity style={styles.searchBtnNew} onPress={searchFood}>
-                        {loadingSearch ? <ActivityIndicator size="small" color="white"/> : <Ionicons name="search" size={20} color="white" />}
+                        {loadingSearch ? <ActivityIndicator size="small" color="white"/> : <Ionicons name="search" size={18} color="white" />}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.scanBtnNew} onPress={openCameraModal}>
-                        <Ionicons name="barcode-outline" size={20} color="white" />
+                        <Ionicons name="barcode-outline" size={18} color="white" />
                     </TouchableOpacity>
                 </View>
                 
@@ -1061,9 +1064,9 @@ const styles = StyleSheet.create({
   inputModal: { backgroundColor: '#2A4562', color: 'white', padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 10 },
   timeButtonNew: { backgroundColor: '#2A4562', padding: 12, borderRadius: 8, marginBottom: 10, flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   timeTextNew: { color: 'white', fontWeight: 'bold' },
-  searchRowNew: { flexDirection: 'row', gap: 10, marginBottom: 15 },
-  searchBtnNew: { backgroundColor: '#3498DB', padding: 12, borderRadius: 8, justifyContent: 'center', width: 44, alignItems:'center' },
-  scanBtnNew: { backgroundColor: '#9b59b6', padding: 12, borderRadius: 8, justifyContent: 'center', width: 44, alignItems:'center' },
+  searchRowNew: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  searchBtnNew: { backgroundColor: '#3498DB', padding: 8, borderRadius: 8, justifyContent: 'center', width: 36, height: 36, alignItems:'center' },
+  scanBtnNew: { backgroundColor: '#9b59b6', padding: 8, borderRadius: 8, justifyContent: 'center', width: 36, height: 36, alignItems:'center' },
   resultsBoxNew: { backgroundColor: '#1E2C3D', borderRadius: 8, padding: 5, maxHeight: 150, marginBottom: 10 },
   resultItemNew: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: '#333' },
   resultImageNew: { width: 30, height: 30, borderRadius: 15, marginRight: 10 },

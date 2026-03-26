@@ -48,9 +48,7 @@ const MessagesListScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={28} color="#3498DB" />
-        </TouchableOpacity>
+
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={{ width: 28 }} />
       </View>
