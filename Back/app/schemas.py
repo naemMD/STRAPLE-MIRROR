@@ -265,7 +265,8 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = None
     description: Optional[str] = Field(None, max_length=150)
-    
+    age: Optional[int] = None
+    gender: Optional[str] = None
     city: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

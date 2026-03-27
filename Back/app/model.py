@@ -195,6 +195,25 @@ async def update_user_description(session: AsyncSession, user_id: int, descripti
     return {"message": "Description updated successfully", "description": user.description}
 
 
+async def update_user_profile(session: AsyncSession, user_id: int, update_data: UserUpdate):
+    result = await session.execute(select(Users).where(Users.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    updatable_fields = ["firstname", "lastname", "email", "age", "gender", "city",
+                        "latitude", "longitude", "weight", "height", "goal", "fitness_level", "description"]
+    for field in updatable_fields:
+        value = getattr(update_data, field, None)
+        if value is not None:
+            setattr(user, field, value)
+
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return {"message": "Profile updated successfully"}
+
+
 async def get_dashboard_stats(session: AsyncSession, current_user):
     print(f"DEBUG: Auth object received: {type(current_user)}")
 

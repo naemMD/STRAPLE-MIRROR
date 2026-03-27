@@ -586,7 +586,7 @@ const HomeScreen = () => {
                     <Text style={styles.caloriesRemaining}>{Math.round(dashboardStats.calories_remaining)} Remaining</Text>
                 </View>
                 <TouchableOpacity onPress={() => { setNewGoal(dashboardStats.daily_caloric_goal.toString()); setIsGoalModalVisible(true); }} style={{padding: 5}}>
-                    <Ionicons name="pencil-outline" size={20} color="#3498DB" />
+                    <Ionicons name="create-outline" size={20} color="#3498DB" />
                 </TouchableOpacity>
             </View>
 

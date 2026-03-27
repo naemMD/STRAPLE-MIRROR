@@ -7,9 +7,9 @@ import { Toast } from 'react-native-toast-message/lib/src/Toast';
 import api from '@/services/api';
 
 const GOAL_LABELS: Record<string, string> = {
-  lose_weight: 'Lose Weight',
-  gain_muscle: 'Gain Muscle',
-  maintain_weight: 'Maintain Weight',
+  lose_weight: 'Weight Loss',
+  gain_muscle: 'Muscle Gain',
+  maintain_weight: 'Maintain',
 };
 
 const UserPublicProfile = () => {

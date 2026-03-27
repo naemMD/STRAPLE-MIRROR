@@ -71,6 +71,15 @@ async def get_dashboard_stats_route(
     return await get_dashboard_stats(session, current_user)
 
 
+@router.patch("/users/me/profile")
+async def update_my_profile(
+    update_data: UserUpdate,
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session)
+):
+    return await update_user_profile(session, current_user_id, update_data)
+
+
 @router.patch("/users/me/description")
 async def update_my_description(
     update_data: UserUpdate,

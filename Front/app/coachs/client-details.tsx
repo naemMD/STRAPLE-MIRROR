@@ -29,9 +29,9 @@ const FoodImage = ({ uri, style, iconSize = 24 }: any) => {
 };
 
 const goalLabels: { [key: string]: string } = {
-  'lose_weight': '📉 Weight Loss',
-  'gain_muscle': '💪 Muscle Gain',
-  'maintain': '⚖️ Maintain'
+  'lose_weight': 'Weight Loss',
+  'gain_muscle': 'Muscle Gain',
+  'maintain_weight': 'Maintain',
 };
 
 const ClientDetailsScreen = () => {
@@ -600,7 +600,7 @@ const ClientDetailsScreen = () => {
             <View style={styles.sectionContainer}>
                 <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15}}>
                    <Text style={styles.sectionTitle}>Nutrition Goals</Text>
-                   <TouchableOpacity onPress={openEditModal}><Ionicons name="pencil" size={20} color="#3498DB" /></TouchableOpacity>
+                   <TouchableOpacity onPress={openEditModal}><Ionicons name="create-outline" size={20} color="#3498DB" /></TouchableOpacity>
                 </View>
                 <View style={styles.caloriesCard}>
                     <Text style={styles.calTitle}>Total Consumed</Text>
@@ -636,7 +636,7 @@ const ClientDetailsScreen = () => {
                                     <Ionicons name={expandedMeals.includes(meal.id) ? "chevron-up" : "chevron-down"} size={20} color="#888" />
                                 </TouchableOpacity>
                                 <View style={{flexDirection: 'row', marginLeft: 15, alignItems: 'center'}}>
-                                    <TouchableOpacity onPress={() => openEditMealModal(meal)} style={{marginRight: 15}}><Ionicons name="pencil" size={20} color="#3498DB" /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => openEditMealModal(meal)} style={{marginRight: 15}}><Ionicons name="create-outline" size={20} color="#3498DB" /></TouchableOpacity>
                                     <TouchableOpacity onPress={() => handleDeleteMeal(meal.id)}><Ionicons name="trash" size={20} color="#e74c3c" /></TouchableOpacity>
                                 </View>
                                 
@@ -688,7 +688,7 @@ const ClientDetailsScreen = () => {
                                     <Ionicons name={expandedWorkouts.includes(workout.id) ? "chevron-up" : "chevron-down"} size={20} color="#888" />
                                 </TouchableOpacity>
                                 <View style={{flexDirection: 'row', marginLeft: 10, alignItems: 'center', gap: 12}}>
-                                    <TouchableOpacity onPress={() => handleEditWorkout(workout)} style={{padding: 4}}><Ionicons name="pencil" size={20} color="#3498DB" /></TouchableOpacity>
+                                    <TouchableOpacity onPress={() => handleEditWorkout(workout)} style={{padding: 4}}><Ionicons name="create-outline" size={20} color="#3498DB" /></TouchableOpacity>
                                     <TouchableOpacity onPress={() => handleDeleteWorkout(workout.id)} style={{padding: 4}}><Ionicons name="trash" size={20} color="#e74c3c" /></TouchableOpacity>
                                 </View>
                                 {expandedWorkouts.includes(workout.id) && (

@@ -30,10 +30,9 @@ const CoachListScreen = () => {
 
   // Configuration des objectifs pour la modale
   const goalConfig: { [key: string]: { label: string; color: string } } = {
-    'lose_weight': { label: 'Lose Weight', color: '#E74C3C' },
-    'gain_muscle': { label: 'Gain Muscle', color: '#2ECC71' },
-    'maintain': { label: 'Maintain Weight', color: '#F1C40F' },
-    'maintain_weight': { label: 'Maintain Weight', color: '#F1C40F' }
+    'lose_weight': { label: 'Weight Loss', color: '#E74C3C' },
+    'gain_muscle': { label: 'Muscle Gain', color: '#2ECC71' },
+    'maintain_weight': { label: 'Maintain', color: '#F1C40F' }
   };
 
   const fetchClients = async (id = userId) => {
