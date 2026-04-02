@@ -45,8 +45,8 @@ export default {
     },
 
     extra: {
-      API_URL: "http://192.168.1.53:8080"
-      // API_URL: "https://nutri-f0dxc3e8chd9f0g2.spaincentral-01.azurewebsites.net"
+      // API_URL: "http://192.168.1.53:8080"
+      API_URL: "https://nutri-f0dxc3e8chd9f0g2.spaincentral-01.azurewebsites.net"
     }
   }
 };
