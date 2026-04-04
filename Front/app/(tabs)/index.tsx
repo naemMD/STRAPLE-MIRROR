@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import StapleLogo from '@/components/StapleLogo';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router'; // <-- Import de Link ajouté ici
 
 import { getToken, getUserDetails } from '@/services/authStorage';
 
@@ -67,21 +67,24 @@ const Index = () => {
       )}
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={() => navigation.push('/login')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.loginButtonText}>Log In</Text>
-        </TouchableOpacity>
+        {/* Remplacement par le composant Link d'Expo Router */}
+        <Link href="/login" asChild>
+          <TouchableOpacity
+            style={styles.loginButton}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.loginButtonText}>Log In</Text>
+          </TouchableOpacity>
+        </Link>
 
-        <TouchableOpacity
-          style={styles.signupButton}
-          onPress={() => navigation.push('/signup')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.signupButtonText}>Sign Up</Text>
-        </TouchableOpacity>
+        <Link href="/signup" asChild>
+          <TouchableOpacity
+            style={styles.signupButton}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.signupButtonText}>Sign Up</Text>
+          </TouchableOpacity>
+        </Link>
       </View>
 
       <Text style={styles.footerText}>Your personal fitness & nutrition app</Text>
