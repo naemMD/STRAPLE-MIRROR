@@ -27,7 +27,10 @@
       "Bash(unzip -o /tmp/bukhari-script.zip -d /tmp/bukhari-font/)",
       "Read(//tmp/**)",
       "Bash(ls /c/Users/meddour/dev/EIP/NUTRITRAIN-MIRROR/*.ttf /c/Users/meddour/dev/EIP/NUTRITRAIN-MIRROR/*.woff*)",
-      "Bash(chmod +x /c/Users/meddour/dev/EIP/NUTRITRAIN-MIRROR/scripts/build.sh)"
+      "Bash(chmod +x /c/Users/meddour/dev/EIP/NUTRITRAIN-MIRROR/scripts/build.sh)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)"
     ]
   }
 }

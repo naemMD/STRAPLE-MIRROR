@@ -21,7 +21,8 @@ export default function Root({ children }: PropsWithChildren) {
           content="black-translucent"
         />
         <meta name="apple-mobile-web-app-title" content="Staple" />
-        <link rel="apple-touch-icon" href="/app/icons/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="373x373" href="/app/icons/icon-373.png" />
 
         <ScrollViewStyleReset />
       </head>
