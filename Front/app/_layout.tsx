@@ -4,7 +4,6 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -22,7 +21,7 @@ export default function RootLayout() {
 
   // Register Service Worker on web only
   useEffect(() => {
-    if (Platform.OS === 'web' && 'serviceWorker' in navigator) {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/app/sw.js', { scope: '/app/' })
         .catch((err) => console.warn('SW registration failed:', err));
@@ -47,7 +46,7 @@ export default function RootLayout() {
       </Stack>
       <Toast />
       <StatusBar style="auto" />
-      {Platform.OS === 'web' && <InstallAppBanner />}
+      <InstallAppBanner />
     </ThemeProvider>
   );
 }

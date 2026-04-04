@@ -24,6 +24,17 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" sizes="180x180" href="/app/icons/apple-touch-icon.png" />
         <link rel="apple-touch-icon" sizes="373x373" href="/app/icons/icon-373.png" />
 
+        {/* Load BukhariScript font via CSS for reliable web rendering */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          @font-face {
+            font-family: 'BukhariScript';
+            src: url('/app/BukhariScript.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+          }
+        `}} />
+
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>
