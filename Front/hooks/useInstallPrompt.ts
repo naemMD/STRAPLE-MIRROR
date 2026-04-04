@@ -6,15 +6,35 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export type InstallState =
-  | "hidden"         // not on web, or already installed, or desktop
+  | "hidden"         // not on web, or already installed
   | "ios"            // iOS Safari — manual share instructions
   | "android-ready"  // beforeinstallprompt fired — one-tap install available
   | "android-manual" // mobile Chrome/browser but prompt not (yet) available
   | "installed"      // user accepted install
-  | "dismissed";     // user dismissed the banner
+  | "dismissed";     // user dismissed
 
 function isRunningOnWeb(): boolean {
   return typeof window !== "undefined" && typeof document !== "undefined";
+}
+
+function detectIOS(): boolean {
+  if (!isRunningOnWeb()) return false;
+  const ua = navigator.userAgent || "";
+  // iPhone, iPad, iPod in UA
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  // iPad on iOS 13+ pretends to be Mac
+  if (/Macintosh/i.test(ua) && "ontouchstart" in window) return true;
+  return false;
+}
+
+function detectMobile(): boolean {
+  if (!isRunningOnWeb()) return false;
+  const ua = navigator.userAgent || "";
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)) return true;
+  if (/Macintosh/i.test(ua) && "ontouchstart" in window) return true;
+  // Fallback: touch screen + small viewport
+  if ("ontouchstart" in window && window.innerWidth < 1024) return true;
+  return false;
 }
 
 export function useInstallPrompt() {
@@ -33,39 +53,19 @@ export function useInstallPrompt() {
       return;
     }
 
-    const ua = navigator.userAgent || "";
-
-    // Detect iOS — multiple methods for reliability
-    const isIOS =
-      /iPad|iPhone|iPod/.test(ua) ||
-      // iPad on iOS 13+ reports as Mac
-      (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1) ||
-      // Fallback: old navigator.platform
-      /iPad|iPhone|iPod/.test(navigator.platform || "");
-
-    // Detect Android
-    const isAndroid = /Android/i.test(ua);
-
-    // Detect any mobile browser
-    const isMobile =
-      isIOS ||
-      isAndroid ||
-      /webOS|BlackBerry|Opera Mini|IEMobile|Mobile/i.test(ua) ||
-      ("ontouchstart" in window && window.innerWidth < 768);
-
-    // Desktop — don't show banner
-    if (!isMobile) {
+    // Desktop — don't show
+    if (!detectMobile()) {
       setState("hidden");
       return;
     }
 
-    // iOS — always show manual share instructions
-    if (isIOS) {
+    // iOS
+    if (detectIOS()) {
       setState("ios");
       return;
     }
 
-    // Android/other mobile — start with manual, upgrade if native prompt fires
+    // Android/other mobile
     setState("android-manual");
 
     const onPrompt = (e: Event) => {

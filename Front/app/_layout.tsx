@@ -7,7 +7,6 @@ import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { InstallAppBanner } from '@/components/InstallAppBanner';
 import Toast from 'react-native-toast-message';
 
 SplashScreen.preventAutoHideAsync();
@@ -46,7 +45,6 @@ export default function RootLayout() {
       </Stack>
       <Toast />
       <StatusBar style="auto" />
-      <InstallAppBanner />
     </ThemeProvider>
   );
 }
