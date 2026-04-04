@@ -60,7 +60,7 @@ const Index = () => {
               <Ionicons name="close" size={18} color="#8A8D91" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.installHint}>
+          <Text style={styles.installHint}> 
             To install this app on your phone, tap the Share button in your browser toolbar, then select "Add to Home Screen".
           </Text>
         </View>
