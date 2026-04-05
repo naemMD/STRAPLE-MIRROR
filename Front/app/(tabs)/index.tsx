@@ -1,23 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Pressable } from 'react-native';
 import StapleLogo from '@/components/StapleLogo';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
 
 import { getToken, getUserDetails } from '@/services/authStorage';
 
 const Index = () => {
   const insets = useSafeAreaInsets();
   const navigation = useRouter();
-  const [isWeb, setIsWeb] = useState(false);
+  const [isIOSSafari, setIsIOSSafari] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
   const [installDismissed, setInstallDismissed] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      // Only show on mobile-sized screens
-      if (window.innerWidth < 1024) {
-        setIsWeb(true);
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+      const ua = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|EdgiOS|Chrome/.test(ua);
+      const standalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+      setIsStandalone(standalone);
+      if (isIOS && isSafari && !standalone) {
+        setIsIOSSafari(true);
       }
     }
   }, []);
@@ -51,37 +56,44 @@ const Index = () => {
         </Text>
       </View>
 
-      {isWeb && !installDismissed && (
+      {isIOSSafari && !isStandalone && !installDismissed && (
         <View style={styles.installCard}>
           <View style={styles.installHeader}>
-            <Ionicons name="download-outline" size={22} color="#3498DB" />
+            <Ionicons name="share-outline" size={22} color="#3498DB" />
             <Text style={styles.installTitle}>Install Staple App</Text>
             <TouchableOpacity onPress={() => setInstallDismissed(true)}>
               <Ionicons name="close" size={18} color="#8A8D91" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.installHint}> 
-            To install this app on your phone, tap the Share button in your browser toolbar, then select "Add to Home Screen".
+          <Text style={styles.installHint}>
+            Tap the{' '}
           </Text>
+          <View style={styles.installSteps}>
+            <Text style={styles.installStep}>
+              1. Tap <Ionicons name="share-outline" size={14} color="#3498DB" /> at the bottom of Safari
+            </Text>
+            <Text style={styles.installStep}>
+              2. Scroll down and tap "Add to Home Screen"
+            </Text>
+            <Text style={styles.installStep}>
+              3. Tap "Add" to confirm
+            </Text>
+          </View>
         </View>
       )}
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={() => navigation.push('/login')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.loginButtonText}>Log In</Text>
-        </TouchableOpacity>
+        <Link href="/login" asChild>
+          <Pressable style={styles.loginButton}>
+            <Text style={styles.loginButtonText}>Log In</Text>
+          </Pressable>
+        </Link>
 
-        <TouchableOpacity
-          style={styles.signupButton}
-          onPress={() => navigation.push('/signup')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.signupButtonText}>Sign Up</Text>
-        </TouchableOpacity>
+        <Link href="/signup" asChild>
+          <Pressable style={styles.signupButton}>
+            <Text style={styles.signupButtonText}>Sign Up</Text>
+          </Pressable>
+        </Link>
       </View>
 
       <Text style={styles.footerText}>Your personal fitness & nutrition app</Text>
@@ -143,6 +155,14 @@ const styles = StyleSheet.create({
     color: '#8A8D91',
     fontSize: 13,
     lineHeight: 20,
+  },
+  installSteps: {
+    marginTop: 4,
+  },
+  installStep: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    lineHeight: 22,
   },
   buttonContainer: {
     width: '100%',
