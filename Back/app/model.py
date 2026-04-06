@@ -65,7 +65,29 @@ async def get_user_by_id(session: AsyncSession, user_id):
     )
 
 
+def _load_whitelist():
+    """Load authorized emails from whitelist.txt (next to app/ folder)."""
+    import pathlib
+    wl_path = pathlib.Path(__file__).resolve().parent.parent / "whitelist.txt"
+    if not wl_path.exists():
+        return None  # No whitelist file = no restriction
+    emails = set()
+    for line in wl_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            emails.add(line.lower())
+    return emails
+
+
 async def register_user(session: AsyncSession, user_data: dict):
+    # Beta whitelist check
+    allowed = _load_whitelist()
+    if allowed is not None and user_data.get("email", "").lower() not in allowed:
+        raise HTTPException(
+            status_code=403,
+            detail="Registration is restricted to authorized beta testers only. Please contact us to request access."
+        )
+
     try:
         user_data['age'] = int(user_data['age'])
     except ValueError:

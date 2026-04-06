@@ -1,0 +1,11 @@
+# Staple Beta — Authorized emails (one per line)
+# Only these addresses can create an account.
+
+coach@mail.fr
+coach1@mail.fr
+coach2@mail.fr
+user@smail.fr
+naem@smail.fr
+rayan@smail.fr
+evan@smail.fr
+test@mail.fr
