@@ -1314,29 +1314,34 @@ async def newsletter_unsubscribe_route(
     return await unsubscribe_newsletter(session, token)
 
 
+async def _verify_admin_key(request: Request):
+    """Check X-Admin-Key header against ADMIN_API_KEY env var."""
+    admin_key = os.getenv("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=500, detail="ADMIN_API_KEY not configured on server")
+    provided = request.headers.get("X-Admin-Key")
+    if not provided or provided != admin_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing admin key")
+
+
 @router.post("/newsletter/send")
 async def newsletter_send_route(
     data: NewsletterSendRequest,
-    current_user_id: int = Depends(get_current_user_id),
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """Send a newsletter to all active subscribers (admin only)."""
-    # Check that the sender is an admin
-    user = await session.get(Users, current_user_id)
-    if not user or user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can send newsletters")
+    """Send a newsletter to all active subscribers (admin key required)."""
+    await _verify_admin_key(request)
     return await send_newsletter(session, data.subject, data.html_content)
 
 
 @router.get("/newsletter/subscribers")
 async def newsletter_list_route(
-    current_user_id: int = Depends(get_current_user_id),
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """List all newsletter subscribers (admin only)."""
-    user = await session.get(Users, current_user_id)
-    if not user or user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can view subscribers")
+    """List all newsletter subscribers (admin key required)."""
+    await _verify_admin_key(request)
     from app.schemas import NewsletterSubscriber
     result = await session.execute(
         select(NewsletterSubscriber).order_by(desc(NewsletterSubscriber.subscribed_at))
@@ -1350,3 +1355,25 @@ async def newsletter_list_route(
         "subscribed_at": s.subscribed_at.isoformat() if s.subscribed_at else None,
         "unsubscribed_at": s.unsubscribed_at.isoformat() if s.unsubscribed_at else None,
     } for s in subs]
+
+
+@router.post("/newsletter/import")
+async def newsletter_import_route(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Bulk-import emails into the newsletter (admin key required). Body: {"emails": ["a@b.com", ...]}"""
+    await _verify_admin_key(request)
+    body = await request.json()
+    emails = body.get("emails", [])
+    if not emails:
+        raise HTTPException(status_code=400, detail="No emails provided")
+    added = 0
+    skipped = 0
+    for email in emails:
+        result = await subscribe_newsletter(session, email.strip())
+        if result.status_code == 201:
+            added += 1
+        else:
+            skipped += 1
+    return {"detail": f"Imported {added} new subscriber(s), {skipped} already existed"}
