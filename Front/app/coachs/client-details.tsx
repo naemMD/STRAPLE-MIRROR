@@ -12,6 +12,7 @@ import { crossAlert } from '@/services/crossAlert';
 
 import { getUniqueMuscles, getExercisesByMuscle } from '@/constants/exercisesData';
 import api from '@/services/api';
+import FoodResultsPicker from '@/components/FoodResultsPicker';
 
 const { width } = Dimensions.get('window');
 
@@ -75,6 +76,7 @@ const ClientDetailsScreen = () => {
   const [foodSearchQuery, setFoodSearchQuery] = useState('');
   const [foodSearchWeight, setFoodSearchWeight] = useState('');
   const [foodSearchResults, setFoodSearchResults] = useState<any[]>([]);
+  const [showResultsPicker, setShowResultsPicker] = useState(false);
   const [searchingFood, setSearchingFood] = useState(false);
 
   // --- SCANNER STATES ---
@@ -156,7 +158,7 @@ const ClientDetailsScreen = () => {
       await api.patch(`/users/${clientId}/goals`, payload);
       setModalVisible(false);
       loadData();
-      Toast.show({ type: 'success', text1: 'Goals updated! 🎯' });
+      Toast.show({ type: 'success', text1: 'Goals updated' });
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Could not update goals.' });
     } finally {
@@ -210,11 +212,13 @@ const ClientDetailsScreen = () => {
     setSearchingFood(true);
     try {
       const response = await api.get(`/getAlimentFromApi/${foodSearchQuery}`);
-      setFoodSearchResults(response.data.map((food: any) => ({
+      const mapped = response.data.map((food: any) => ({
           name: food.name,
           image: food.image,
           code: food.code || food.id || food.barcode || null
-      })));
+      }));
+      setFoodSearchResults(mapped);
+      if (mapped.length > 0) setShowResultsPicker(true);
     } catch (error) {
       setFoodSearchResults([]);
     }
@@ -249,8 +253,9 @@ const ClientDetailsScreen = () => {
       };
 
       setSelectedFoods(prev => [...prev, newItem]);
-      setFoodSearchResults([]); 
-      setFoodSearchQuery(''); 
+      setShowResultsPicker(false);
+      setFoodSearchResults([]);
+      setFoodSearchQuery('');
       setFoodSearchWeight('');
     } catch (error) {
       crossAlert("Error", "Could not fetch food details.");
@@ -519,7 +524,7 @@ const ClientDetailsScreen = () => {
       }
       setWorkoutModalVisible(false);
       loadData();
-      Toast.show({ type: 'success', text1: 'Workout saved! 💪' });
+      Toast.show({ type: 'success', text1: 'Workout saved' });
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Error', text2: "Could not save workout." });
     } finally { 
@@ -739,9 +744,9 @@ const ClientDetailsScreen = () => {
 
       {/* MODALS (Identiques au reste) */}
       <Modal visible={isMealModalVisible} animationType="slide" transparent>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsMealModalVisible(false)}>
-            <TouchableWithoutFeedback>
+        <View style={styles.modalOverlay}>
                 <View style={styles.mealModalContent}>
+                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
                     <Text style={styles.modalTitle}>{editingMealId ? "Edit Meal" : "Create Meal"}</Text>
                     <TextInput style={styles.inputModal} placeholder="Meal Name (e.g. Lunch)" placeholderTextColor="#888" value={mealName} onChangeText={setMealName} />
                     
@@ -775,19 +780,13 @@ const ClientDetailsScreen = () => {
                         </TouchableOpacity>
                     </View>
                     
-                    {foodSearchResults.length > 0 && (
-                        <View style={styles.resultsBox}>
-                            <ScrollView nestedScrollEnabled keyboardDismissMode="on-drag">
-                                {foodSearchResults.map((item, i) => (
-                                    <TouchableOpacity key={i} style={styles.resultItem} onPress={() => handleSelectFoodResult(item)}>
-                                        <FoodImage uri={item.image} style={styles.resultImage} iconSize={18}/>
-                                        <Text style={styles.resultText} numberOfLines={1}>{item.name}</Text>
-                                        <Ionicons name="add-circle" size={24} color="#3498DB" />
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        </View>
-                    )}
+                    <FoodResultsPicker
+                        visible={showResultsPicker}
+                        results={foodSearchResults}
+                        onSelect={handleSelectFoodResult}
+                        onClose={() => setShowResultsPicker(false)}
+                        accentColor="#3498DB"
+                    />
 
                     <View style={styles.fixedListContainer}>
                         <Text style={[styles.inputLabelModal, {marginBottom: 5}]}>Selected Items ({selectedFoods.length})</Text>
@@ -833,9 +832,9 @@ const ClientDetailsScreen = () => {
                         <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setIsMealModalVisible(false)}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity>
                         <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleSaveMeal} disabled={savingMeal}><Text style={styles.buttonText}>Save Meal</Text></TouchableOpacity>
                     </View>
+                </ScrollView>
                 </View>
-            </TouchableWithoutFeedback>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       <Modal visible={isCameraOpen} animationType="slide">

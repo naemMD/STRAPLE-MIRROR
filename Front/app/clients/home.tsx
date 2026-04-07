@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity, TouchableWithoutFeedback,
+  StyleSheet, Text, View, TouchableOpacity,
   ScrollView, Image, TextInput, Modal, Keyboard,
   ActivityIndicator, StatusBar, Platform, Dimensions, KeyboardAvoidingView
 } from 'react-native';
@@ -13,6 +13,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { getUserDetails } from '@/services/authStorage';
 import api from '@/services/api';
 import MealCard from '@/components/MealCard';
+import FoodResultsPicker from '@/components/FoodResultsPicker';
 
 const { width, height } = Dimensions.get('window');
 
@@ -53,6 +54,7 @@ const HomeScreen = () => {
   const [search, setSearch] = useState('');
   const [searchWeight, setSearchWeight] = useState(''); 
   const [results, setResults] = useState<any[]>([]);
+  const [showResultsPicker, setShowResultsPicker] = useState(false);
   const [selectedFoods, setSelectedFoods] = useState<any[]>([]);
   const [editingId, setEditingId] = useState(null);
   const [loadingSearch, setLoadingSearch] = useState(false);
@@ -234,6 +236,7 @@ const HomeScreen = () => {
             image: food.image,
             code: food.code || food.id || food.barcode || null
         })));
+        setShowResultsPicker(true);
       }
     } catch (error) {
       setResults([]);
@@ -289,7 +292,7 @@ const HomeScreen = () => {
       };
 
       setSelectedFoods(prev => [...prev, newItem]);
-      setResults([]); setSearch(''); setSearchWeight('');
+      setShowResultsPicker(false); setResults([]); setSearch(''); setSearchWeight('');
 
     } catch (error) {
       crossAlert("Error", "Could not fetch food details.");
@@ -692,10 +695,10 @@ const HomeScreen = () => {
       </ScrollView>
 
       <Modal visible={isModalVisible} animationType="slide" transparent onRequestClose={handleCloseModal}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
+        <View style={styles.modalOverlay} onStartShouldSetResponder={() => { Keyboard.dismiss(); return false; }}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', alignItems:'center' }}>
-            <TouchableWithoutFeedback>
             <View style={styles.mealModalContent}>
+            <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
                 <Text style={styles.modalTitle}>{editingId ? "Edit Meal" : "Create Meal"}</Text>
                 
                 <View style={{flexDirection: 'row', gap: 10, marginBottom: 15}}>
@@ -761,19 +764,13 @@ const HomeScreen = () => {
                     </TouchableOpacity>
                 </View>
                 
-                {results.length > 0 && (
-                    <View style={styles.resultsBoxNew}>
-                        <ScrollView nestedScrollEnabled keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
-                            {results.map((item, i) => (
-                                <TouchableOpacity key={i} style={styles.resultItemNew} onPress={() => handleSelectFood(item)}>
-                                    <FoodImage uri={item.image} style={styles.resultImageNew} iconSize={18}/>
-                                    <Text style={styles.resultTextNew} numberOfLines={1}>{item.name}</Text>
-                                    <Ionicons name="add-circle" size={24} color="#2ecc71" />
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
+                <FoodResultsPicker
+                    visible={showResultsPicker}
+                    results={results}
+                    onSelect={handleSelectFood}
+                    onClose={() => setShowResultsPicker(false)}
+                    accentColor="#2ecc71"
+                />
 
                 <View style={styles.fixedListContainerNew}>
                     <Text style={[styles.inputLabelModal, {marginBottom: 5}]}>Selected Items ({selectedFoods.length}/{MAX_FOODS_PER_MEAL})</Text>
@@ -838,10 +835,10 @@ const HomeScreen = () => {
                         {savingMeal ? <ActivityIndicator color="white" size="small" /> : <Text style={styles.buttonTextNew}>{editingId ? "Update" : "Save"}</Text>}
                     </TouchableOpacity>
                 </View>
+            </ScrollView>
             </View>
-            </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       <Modal visible={isCameraOpen} animationType="slide">

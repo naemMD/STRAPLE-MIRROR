@@ -70,7 +70,7 @@ export default function CoachHomepage() {
 
       Toast.show({
         type: 'success',
-        text1: status === 'accepted' ? 'Client Assigned! ✅' : 'Request Declined',
+        text1: status === 'accepted' ? 'Client Assigned' : 'Request Declined',
         text2: status === 'accepted' ? 'New client added to your roster.' : 'The request has been removed.'
       });
 

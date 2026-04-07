@@ -21,8 +21,9 @@ const CoachListScreen = () => {
 
   // Modal pour inviter un client
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
-  const [clientCode, setClientCode] = useState('#'); 
+  const [clientCode, setClientCode] = useState('#');
   const [adding, setAdding] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   // Modal pour voir le profil d'une demande reçue (Comme sur le Home)
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
@@ -92,24 +93,26 @@ const CoachListScreen = () => {
   };
 
   const handleAddClient = async () => {
+      setInviteError('');
       if (!clientCode.trim().startsWith('#') || clientCode.length < 7) {
-          Toast.show({ type: 'error', text1: 'Invalid Code', text2: 'Please enter a valid code (e.g. #123456)' });
+          setInviteError('Please enter a valid code (e.g. #123456)');
           return;
       }
-      
+
       setAdding(true);
       try {
           await api.post(
             `/coaches/invite-client`,
             { unique_code: clientCode.trim() }
           );
-          Toast.show({ type: 'success', text1: 'Invitation sent! 🚀', text2: 'Your coaching request has been sent.' });
           setIsInviteModalVisible(false);
           setClientCode('#');
+          setInviteError('');
           fetchSentInvitations();
+          Toast.show({ type: 'success', text1: 'Invitation sent', text2: 'Your coaching request has been sent.' });
       } catch (error: any) {
           const msg = error.response?.data?.detail || "Failed to send invitation. Please try again.";
-          Toast.show({ type: 'error', text1: 'Error', text2: msg });
+          setInviteError(msg);
       } finally {
           setAdding(false);
       }
@@ -163,7 +166,7 @@ const CoachListScreen = () => {
           
           Toast.show({
               type: 'success',
-              text1: status === 'accepted' ? 'Client Assigned! ✅' : 'Request Declined',
+              text1: status === 'accepted' ? 'Client Assigned' : 'Request Declined',
               text2: status === 'accepted' ? 'New client added to your roster.' : 'The request has been removed.'
           });
           
@@ -414,23 +417,30 @@ const CoachListScreen = () => {
 
       {/* Modal originale d'Invitation via Code */}
       <Modal visible={isInviteModalVisible} transparent animationType="slide">
-          <Pressable style={styles.inviteModalBackground} onPress={() => setIsInviteModalVisible(false)}>
+          <Pressable style={styles.inviteModalBackground} onPress={() => { setIsInviteModalVisible(false); setInviteError(''); }}>
               <Pressable style={styles.inviteModalContainer} onPress={(e) => e.stopPropagation()}>
                   <Text style={styles.inviteModalTitle}>Invite a Client</Text>
                   <Text style={styles.inviteModalSubtitle}>Enter the unique code provided by the client to send a request.</Text>
-                  
-                  <TextInput 
-                      style={styles.input}
+
+                  <TextInput
+                      style={[styles.input, inviteError ? styles.inputError : null]}
                       placeholder="#123456"
                       placeholderTextColor="#aaa"
                       value={clientCode}
-                      onChangeText={handleCodeChange}
+                      onChangeText={(t) => { handleCodeChange(t); setInviteError(''); }}
                       autoCapitalize="none"
                       maxLength={7}
                   />
 
+                  {inviteError ? (
+                      <View style={styles.inviteErrorRow}>
+                          <Ionicons name="alert-circle" size={16} color="#E74C3C" />
+                          <Text style={styles.inviteErrorText}>{inviteError}</Text>
+                      </View>
+                  ) : null}
+
                   <View style={styles.inviteModalButtons}>
-                      <TouchableOpacity style={[styles.inviteModalBtn, {backgroundColor: '#e74c3c'}]} onPress={() => setIsInviteModalVisible(false)}>
+                      <TouchableOpacity style={[styles.inviteModalBtn, {backgroundColor: '#e74c3c'}]} onPress={() => { setIsInviteModalVisible(false); setInviteError(''); }}>
                           <Text style={styles.inviteModalBtnText}>Cancel</Text>
                       </TouchableOpacity>
 
@@ -513,7 +523,10 @@ const styles = StyleSheet.create({
   inviteModalContainer: { width: '85%', backgroundColor: '#2A4562', borderRadius: 15, padding: 20, alignItems: 'center' },
   inviteModalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
   inviteModalSubtitle: { color: '#ccc', textAlign: 'center', marginBottom: 20, fontSize: 14 },
-  input: { backgroundColor: '#1A1F2B', width: '100%', color: 'white', padding: 15, borderRadius: 10, fontSize: 18, textAlign: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#3498DB' },
+  input: { backgroundColor: '#1A1F2B', width: '100%', color: 'white', padding: 15, borderRadius: 10, fontSize: 18, textAlign: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#3498DB' },
+  inputError: { borderColor: '#E74C3C' },
+  inviteErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14, paddingHorizontal: 4 },
+  inviteErrorText: { color: '#E74C3C', fontSize: 13, flex: 1 },
   inviteModalButtons: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
   inviteModalBtn: { flex: 1, padding: 15, borderRadius: 10, alignItems: 'center', marginHorizontal: 5 },
   inviteModalBtnText: { color: 'white', fontWeight: 'bold' },

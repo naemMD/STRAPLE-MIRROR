@@ -124,7 +124,7 @@ const CoachPublicProfile = () => {
             coach_id: Number(coachId)
         });
 
-        Toast.show({ type: 'success', text1: 'Request sent! 🚀', text2: 'The coach has been notified of your request.' });
+        Toast.show({ type: 'success', text1: 'Request sent', text2: 'The coach has been notified of your request.' });
         await fetchCoachProfileAndStatus(); 
         
     } catch (error: any) {
