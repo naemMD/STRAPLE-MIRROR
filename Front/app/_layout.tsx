@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/CustomToast';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,7 +44,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />
       </Stack>
-      <Toast />
+      <Toast config={toastConfig} position="top" topOffset={50} visibilityTime={3500} />
       <StatusBar style="auto" />
     </ThemeProvider>
   );

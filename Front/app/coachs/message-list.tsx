@@ -66,7 +66,7 @@ const MessagesListScreen = () => {
           keyExtractor={(item) => item.client_id.toString()}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16 }}
-          ListEmptyComponent={<Text style={styles.emptyText}>Aucune conversation.</Text>}
+          ListEmptyComponent={<Text style={styles.emptyText}>No conversations yet. Start chatting with your clients!</Text>}
         />
         {conversations.length > CONVERSATIONS_PER_PAGE && (
           <View style={styles.paginationContainer}>

@@ -867,16 +867,16 @@ async def assign_client_by_code(session: AsyncSession, coach_id: int, unique_cod
     client = result.scalars().first()
 
     if not client:
-        raise HTTPException(status_code=404, detail="Code invalide. Aucun utilisateur trouvé.")
+        raise HTTPException(status_code=404, detail="Client with this code not found.")
 
     if client.id == coach_id:
-        raise HTTPException(status_code=400, detail="Vous ne pouvez pas vous ajouter vous-même.")
+        raise HTTPException(status_code=400, detail="You cannot assign yourself as your client.")
 
     coach_result = await session.execute(select(Users).where(Users.id == coach_id))
     coach = coach_result.scalars().first()
 
     if not coach or coach.role != 'coach':
-        raise HTTPException(status_code=400, detail="Coach invalide.")
+        raise HTTPException(status_code=400, detail="Invalid coach ID")
 
     client.coach_id = coach_id
 
@@ -1698,7 +1698,7 @@ async def get_conversations(session: AsyncSession, user_id: int):
             "client_id": client.id,
             "client_firstname": client.firstname,
             "client_lastname": client.lastname,
-            "last_message": last_msg.content if last_msg else "Aucun message",
+            "last_message": last_msg.content if last_msg else "No messages yet",
             "last_message_time": last_msg.timestamp if last_msg else None
         })
 

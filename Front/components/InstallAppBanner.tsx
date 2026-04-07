@@ -21,23 +21,23 @@ export function InstallAppBanner() {
       <View style={styles.content}>
         <Ionicons name="download-outline" size={28} color="#3498DB" />
         <View style={styles.text}>
-          <Text style={styles.title}>Installer Staple</Text>
+          <Text style={styles.title}>Install Staple</Text>
 
           {isIOS && (
             <Text style={styles.subtitle}>
-              Appuyez sur le bouton Partager puis "Sur l'ecran d'accueil"
+              Tap the Share button then "Add to Home Screen"
             </Text>
           )}
 
           {isAndroidManual && (
             <Text style={styles.subtitle}>
-              Menu ⋮ puis "Ajouter a l'ecran d'accueil"
+              Menu ⋮ then "Add to Home Screen"
             </Text>
           )}
 
           {canNativeInstall && (
             <Text style={styles.subtitle}>
-              Ajoutez l'app sur votre ecran d'accueil
+              Add the app to your home screen
             </Text>
           )}
         </View>
@@ -45,7 +45,7 @@ export function InstallAppBanner() {
 
       {canNativeInstall && (
         <Pressable style={styles.button} onPress={promptInstall}>
-          <Text style={styles.buttonText}>Installer</Text>
+          <Text style={styles.buttonText}>Install</Text>
         </Pressable>
       )}
     </View>

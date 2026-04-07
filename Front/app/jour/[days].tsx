@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { 
+import {
   View, Text, StyleSheet, FlatList, ActivityIndicator,
   TextInput, TouchableOpacity, KeyboardAvoidingView, Platform
 } from 'react-native';
@@ -11,29 +11,27 @@ export default function ProgrammeJour() {
   const [exercices, setExercices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // États pour la recherche
+
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [addingExercice, setAddingExercice] = useState(false);
 
-  // Fonction pour récupérer les exercices du jour
   const fetchExercicesByDay = async () => {
     try {
       setLoading(true);
       const response = await fetch(`http://localhost:8000/exercices/${days}`);
       const data = await response.json();
-      
+
       if (data.status === 'OK') {
         setExercices(data.exercices);
       } else {
-        setError(data.message || 'Aucun exercice trouvé.');
+        setError(data.message || 'No exercises found.');
       }
     } catch (err) {
-      console.error('Erreur API:', err);
-      setError('Erreur de connexion à l\'API');
+      console.error('API Error:', err);
+      setError('Failed to connect to the API');
     } finally {
       setLoading(false);
     }
@@ -45,10 +43,9 @@ export default function ProgrammeJour() {
     }
   }, [days]);
 
-  // Fonction pour rechercher un exercice
   const searchExercice = async () => {
     if (!searchTerm.trim()) {
-      setSearchError('Veuillez entrer un nom d\'exercice');
+      setSearchError('Please enter an exercise name');
       return;
     }
 
@@ -57,23 +54,22 @@ export default function ProgrammeJour() {
       setSearchError(null);
       const response = await fetch(`http://localhost:8000/exercice/search?nom=${encodeURIComponent(searchTerm)}`);
       const data = await response.json();
-      
+
       if (data.status === 'OK') {
         setSearchResult(data.exercice);
       } else {
-        setSearchError(data.message || 'Exercice non trouvé');
+        setSearchError(data.message || 'Exercise not found');
         setSearchResult(null);
       }
     } catch (err) {
-      console.error('Erreur de recherche:', err);
-      setSearchError('Erreur lors de la recherche');
+      console.error('Search error:', err);
+      setSearchError('An error occurred while searching');
       setSearchResult(null);
     } finally {
       setSearching(false);
     }
   };
 
-  // Fonction pour ajouter l'exercice au jour sélectionné
   const addExerciseToDay = async () => {
     if (!searchResult) return;
 
@@ -82,81 +78,76 @@ export default function ProgrammeJour() {
       const response = await fetch(`http://localhost:8000/exercice/update-day?exercice_id=${searchResult._id}&day=${days}`, {
         method: 'PUT'
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === 'OK') {
-        // Réinitialiser la recherche
         setSearchResult(null);
         setSearchTerm('');
-        
-        // Rafraîchir la liste des exercices
+
         fetchExercicesByDay();
-        
-        // Afficher un message de succès
-        crossAlert('Succès', `${data.exercice.nom} a été ajouté au programme du ${days}`);
+
+        crossAlert('Success', `${data.exercice.nom} has been added to ${days}'s program`);
       } else {
-        crossAlert('Erreur', data.message || 'Erreur lors de l\'ajout de l\'exercice');
+        crossAlert('Error', data.message || 'Failed to add the exercise');
       }
     } catch (err) {
-      console.error('Erreur d\'ajout:', err);
-      crossAlert('Erreur', 'Impossible d\'ajouter l\'exercice');
+      console.error('Add error:', err);
+      crossAlert('Error', 'Unable to add the exercise');
     } finally {
       setAddingExercice(false);
     }
   };
 
-  // Vérifier si l'exercice est déjà programmé pour ce jour
   const isExerciseAlreadyScheduled = () => {
     if (!searchResult) return false;
     return searchResult.day === days;
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <Text style={styles.title}>Programme du {days}</Text>
-      
-      {/* Section de recherche d'exercice */}
+      <Text style={styles.title}>{days}'s Program</Text>
+
       <View style={styles.searchSection}>
-        <Text style={styles.sectionTitle}>Rechercher un exercice</Text>
+        <Text style={styles.sectionTitle}>Search for an exercise</Text>
         <View style={styles.searchInputContainer}>
-          <TextInput 
+          <TextInput
             style={styles.searchInput}
-            placeholder="Nom de l'exercice"
+            placeholder="Exercise name"
             value={searchTerm}
             onChangeText={setSearchTerm}
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.searchButton}
             onPress={searchExercice}
             disabled={searching}
           >
-            <Text style={styles.searchButtonText}>Rechercher</Text>
+            <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
         </View>
-        
+
         {searching && <ActivityIndicator size="small" color="#007BFF" style={styles.searchLoading} />}
         {searchError && <Text style={styles.errorText}>{searchError}</Text>}
-        
+
         {searchResult && (
           <View style={styles.resultCard}>
             <Text style={styles.resultTitle}>{searchResult.nom}</Text>
             {searchResult.muscles && (
               <Text style={styles.resultDetails}>
-                Muscles travaillés: {searchResult.muscles.join(', ')}
+                Targeted muscles: {searchResult.muscles.join(', ')}
               </Text>
             )}
             {searchResult.day && (
               <Text style={styles.resultDay}>
-                Jour programmé: {searchResult.day}
+                Scheduled day: {searchResult.day}
               </Text>
             )}
-            
+
             {!isExerciseAlreadyScheduled() && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.addButton}
                 onPress={addExerciseToDay}
                 disabled={addingExercice}
@@ -165,30 +156,29 @@ export default function ProgrammeJour() {
                   <ActivityIndicator size="small" color="white" />
                 ) : (
                   <Text style={styles.addButtonText}>
-                    {searchResult.day ? `Déplacer au ${days}` : `Ajouter au ${days}`}
+                    {searchResult.day ? `Move to ${days}` : `Add to ${days}`}
                   </Text>
                 )}
               </TouchableOpacity>
             )}
-            
+
             {isExerciseAlreadyScheduled() && (
               <Text style={styles.alreadyScheduled}>
-                Cet exercice est déjà programmé pour le {days}
+                This exercise is already scheduled for {days}
               </Text>
             )}
           </View>
         )}
       </View>
-      
-      {/* Liste des exercices du jour */}
+
       <View style={styles.exercisesSection}>
-        <Text style={styles.sectionTitle}>Exercices programmés</Text>
+        <Text style={styles.sectionTitle}>Scheduled exercises</Text>
         {loading ? (
           <ActivityIndicator size="large" color="#007BFF" />
         ) : error ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : exercices.length === 0 ? (
-          <Text style={styles.subtitle}>Aucun exercice programmé pour ce jour.</Text>
+          <Text style={styles.subtitle}>No exercises scheduled for this day.</Text>
         ) : (
           <FlatList
             data={exercices}
@@ -199,7 +189,7 @@ export default function ProgrammeJour() {
                 <Text style={styles.exerciseName}>{item.nom}</Text>
                 {item.muscles && (
                   <Text style={styles.exerciseDetails}>
-                    Muscles travaillés: {item.muscles.join(', ')}
+                    Targeted muscles: {item.muscles.join(', ')}
                   </Text>
                 )}
               </View>
@@ -236,7 +226,6 @@ const styles = StyleSheet.create({
     color: 'red',
     marginTop: 5,
   },
-  // Section de recherche
   searchSection: {
     marginBottom: 20,
     padding: 15,
@@ -271,7 +260,6 @@ const styles = StyleSheet.create({
   searchLoading: {
     marginTop: 10,
   },
-  // Résultat de recherche
   resultCard: {
     backgroundColor: 'white',
     padding: 15,
@@ -309,7 +297,6 @@ const styles = StyleSheet.create({
     color: '#dc3545',
     fontStyle: 'italic',
   },
-  // Section des exercices du jour
   exercisesSection: {
     flex: 1,
   },

@@ -93,7 +93,7 @@ const CoachListScreen = () => {
 
   const handleAddClient = async () => {
       if (!clientCode.trim().startsWith('#') || clientCode.length < 7) {
-          Toast.show({ type: 'error', text1: 'Code invalide', text2: 'Veuillez entrer un code valide (ex: #123456)' });
+          Toast.show({ type: 'error', text1: 'Invalid Code', text2: 'Please enter a valid code (e.g. #123456)' });
           return;
       }
       
@@ -173,7 +173,7 @@ const CoachListScreen = () => {
               fetchClients(userId); 
           }
       } catch (error) {
-          Toast.show({ type: 'error', text1: 'Erreur', text2: 'Impossible de traiter la demande.' });
+          Toast.show({ type: 'error', text1: 'Error', text2: 'Unable to process the request.' });
       }
   };
 

@@ -107,14 +107,14 @@ const SignupPage = () => {
     if (!firstname || firstname.trim() === '') {
       setErrorField('firstname');
       firstNameRef.current?.focus();
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Please enter your first name' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter your first name' });
       return false;
     }
 
     if (!lastname || lastname.trim() === '') {
       setErrorField('lastname');
       lastNameRef.current?.focus();
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Please enter your last name' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter your last name' });
       return false;
     }
 
@@ -122,7 +122,7 @@ const SignupPage = () => {
     if (isNaN(ageNumber) || ageNumber < 0 || ageNumber > 100 || age === '') {
       setErrorField('age');
       ageRef.current?.focus();
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Please enter a valid age' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a valid age' });
       return false;
     }
     
@@ -130,34 +130,34 @@ const SignupPage = () => {
     if (!email || !emailRegex.test(email)) {
       setErrorField('email');
       emailRef.current?.focus();
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Please enter a valid email address' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a valid email address' });
       return false;
     }
     
     if (!password || password.length < 6) {
       setErrorField('password');
       passwordRef.current?.focus();
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Password must be at least 6 characters long' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Password must be at least 6 characters long' });
       return false;
     }
 
     if (password.length > 72) {
       setErrorField('password');
       passwordRef.current?.focus();
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Password cannot exceed 72 characters' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Password cannot exceed 72 characters' });
       return false;
     }
     
     if (password !== confirmPassword) {
       setErrorField('confirmPassword');
       confirmPasswordRef.current?.focus();
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Passwords do not match' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Passwords do not match' });
       return false;
     }
     
     if (!userType) {
       setErrorField('userType');
-      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Please select if you are a client or coach' });
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please select if you are a client or coach' });
       return false;
     }
 

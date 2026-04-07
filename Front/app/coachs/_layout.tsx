@@ -46,24 +46,20 @@ export default function CoachLayout() {
     );
   }
 
-  // 🔥 On ajoute "client-details" ici pour masquer le footer
   const isSpecialPage =
     pathname === "/coachs/profile" ||
     pathname === "/coachs/subscription" ||
     pathname === "/coachs/client-details";
 
-  // 🔥 On crée une variable spécifique pour les pages qui ne doivent avoir AUCUN header (Staple)
   const hideGlobalHeader = pathname === "/coachs/client-details";
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={{ flex: 1, backgroundColor: "#0D1117" }}>
 
-        {/* HEADER : On ne l'affiche QUE si ce n'est pas hideGlobalHeader */}
         {!hideGlobalHeader && (
           <View style={styles.header}>
             
-            {/* LEFT SIDE: Profile or Back */}
             {isSpecialPage ? (
               <TouchableOpacity onPress={() => router.back()}>
                 <Ionicons name="arrow-back" size={28} color="white" />

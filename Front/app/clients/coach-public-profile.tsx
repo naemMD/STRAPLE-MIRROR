@@ -109,9 +109,9 @@ const CoachPublicProfile = () => {
   const handleRequestCoaching = async () => {
     if (hasCoach) {
         crossAlert(
-            "Action Impossible",
-            "Vous avez déjà un coach. Vous devez d'abord vous désassigner de votre coach actuel dans votre profil avant d'envoyer une nouvelle demande.",
-            [{ text: "Compris", style: "default" }]
+            "Action Not Allowed",
+            "You already have a coach. You must first unassign from your current coach in your profile before sending a new request.",
+            [{ text: "Got it", style: "default" }]
         );
         return;
     }

@@ -82,7 +82,7 @@ const LoginPage = () => {
       setError('Connection error. Please check your network and try again.');
       
       crossAlert(
-        'Erreur lors de la connexion', 
+        'Login Error',
         `Unable to connect to the server. Error: ${err.detail}`,
         [{ text: 'OK' }]
       );
