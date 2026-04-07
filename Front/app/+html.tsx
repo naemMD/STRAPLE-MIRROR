@@ -3,13 +3,13 @@ import type { PropsWithChildren } from "react";
 
 export default function Root({ children }: PropsWithChildren) {
   return (
-    <html lang="fr">
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no, viewport-fit=cover"
         />
 
         <link rel="manifest" href="/app/manifest.json" />
@@ -23,6 +23,14 @@ export default function Root({ children }: PropsWithChildren) {
             font-weight: normal;
             font-style: normal;
             font-display: swap;
+          }
+          /* Prevent iOS Safari auto-zoom on input focus */
+          input, select, textarea {
+            font-size: 16px !important;
+          }
+          /* Prevent touch-based zoom gestures */
+          html {
+            touch-action: manipulation;
           }
         `}} />
 

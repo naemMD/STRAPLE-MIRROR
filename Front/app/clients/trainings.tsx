@@ -660,7 +660,7 @@ const TrainingDashboard = () => {
           />
       </View>
 
-      <Animated.View style={[styles.bottomSheet, { top: panY, height: SCREEN_HEIGHT }]}>
+      <Animated.View style={[styles.bottomSheet, { top: panY }]}>
         <View {...panResponder.panHandlers} style={styles.dragHandleArea}>
             <View style={styles.dragHandleBar} />
         </View>
@@ -694,7 +694,7 @@ const TrainingDashboard = () => {
                     keyboardDismissMode="on-drag"
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={renderWorkoutItem}
-                    contentContainerStyle={{ paddingBottom: 200 }}
+                    contentContainerStyle={{ paddingBottom: 120 }}
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
                             <Text style={styles.emptyText}>Rest Day</Text>
@@ -1112,7 +1112,7 @@ const TrainingDashboard = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1A1F2B' },
+  container: { flex: 1, backgroundColor: '#1A1F2B', overflow: 'hidden' },
   fixedBackground: { flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 10, paddingTop: 10 },
   headerTitle: { color: 'white', fontSize: 22, fontWeight: 'bold' },
