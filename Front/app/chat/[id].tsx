@@ -94,10 +94,17 @@ const ChatScreen = () => {
   };
 
   const getNotificationIcon = (type: string): string => {
-    if (type.startsWith('meal')) return 'restaurant-outline';
-    if (type.startsWith('workout')) return 'barbell-outline';
-    if (type.startsWith('profile')) return 'person-outline';
-    return 'notifications-outline';
+    if (type.startsWith('meal')) return 'restaurant';
+    if (type.startsWith('workout')) return 'barbell';
+    if (type.startsWith('profile')) return 'person';
+    return 'notifications';
+  };
+
+  const getNotificationColor = (type: string): string => {
+    if (type.startsWith('meal')) return '#2ecc71';
+    if (type.startsWith('workout')) return '#3498DB';
+    if (type.startsWith('profile')) return '#9b59b6';
+    return '#888';
   };
 
   const getNotificationLabel = (type: string): string => {
@@ -111,11 +118,10 @@ const ChatScreen = () => {
   };
 
   const handleNotificationPress = (notif: any) => {
-    const targetId = currentUserRole === 'coach' ? id : id;
-    if (notif.type.startsWith('meal') || notif.type.startsWith('profile')) {
-      router.push({ pathname: '/coachs/client-details' as any, params: { clientId: targetId } });
-    } else if (notif.type.startsWith('workout')) {
-      router.push({ pathname: '/coachs/client-details' as any, params: { clientId: targetId } });
+    if (currentUserRole === 'coach') {
+      const p: any = { clientId: id, initialDate: notif.date || '' };
+      if (notif.type?.startsWith('meal')) p.openMeal = 'true';
+      router.push({ pathname: '/coachs/client-details' as any, params: p });
     }
   };
 
@@ -124,20 +130,29 @@ const ChatScreen = () => {
     const notif = parseNotification(item.content);
 
     if (notif) {
+      const nColor = getNotificationColor(notif.type);
       return (
         <TouchableOpacity
-          style={[styles.notifBubble, isMe ? styles.myNotif : styles.theirNotif]}
+          style={styles.notifCard}
           onPress={() => handleNotificationPress(notif)}
           activeOpacity={0.7}
         >
-          <View style={styles.notifHeader}>
-            <Ionicons name={getNotificationIcon(notif.type) as any} size={18} color="#3498DB" />
-            <Text style={styles.notifType}>{getNotificationLabel(notif.type)}</Text>
+          <View style={[styles.notifIconBox, { backgroundColor: `${nColor}20` }]}>
+            <Ionicons name={getNotificationIcon(notif.type) as any} size={22} color={nColor} />
           </View>
-          <Text style={styles.notifLabel}>{notif.label}</Text>
-          <View style={styles.notifFooter}>
-            <Text style={styles.notifTap}>Tap to view</Text>
-            <Text style={styles.timeText}>{formatTime(item.timestamp)}</Text>
+          <View style={styles.notifBody}>
+            <View style={styles.notifTopRow}>
+              <Text style={[styles.notifType, { color: nColor }]}>{getNotificationLabel(notif.type)}</Text>
+              <Text style={styles.notifTime}>{formatTime(item.timestamp)}</Text>
+            </View>
+            <Text style={styles.notifLabel} numberOfLines={2}>{notif.client_name || ''}</Text>
+            <Text style={styles.notifDetail} numberOfLines={1}>{notif.label}</Text>
+            {currentUserRole === 'coach' && (
+              <View style={styles.notifAction}>
+                <Text style={[styles.notifActionText, { color: nColor }]}>View in dashboard</Text>
+                <Ionicons name="chevron-forward" size={12} color={nColor} />
+              </View>
+            )}
           </View>
         </TouchableOpacity>
       );
@@ -261,14 +276,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 10
   },
-  notifBubble: { maxWidth: '85%', padding: 14, borderRadius: 16, marginVertical: 4, borderWidth: 1, borderColor: 'rgba(52, 152, 219, 0.3)', backgroundColor: 'rgba(52, 152, 219, 0.08)' },
-  myNotif: { alignSelf: 'flex-end' },
-  theirNotif: { alignSelf: 'flex-start' },
-  notifHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  notifType: { color: '#3498DB', fontSize: 13, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 },
-  notifLabel: { color: 'white', fontSize: 15, fontWeight: '600', marginBottom: 8 },
-  notifFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  notifTap: { color: '#3498DB', fontSize: 11, fontWeight: '600' },
+  notifCard: { flexDirection: 'row', alignSelf: 'stretch', marginHorizontal: 8, marginVertical: 6, backgroundColor: '#1E2C3D', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  notifIconBox: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  notifBody: { flex: 1 },
+  notifTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  notifType: { fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  notifTime: { color: '#555', fontSize: 10 },
+  notifLabel: { color: 'white', fontSize: 14, fontWeight: '600' },
+  notifDetail: { color: '#888', fontSize: 13, marginTop: 2 },
+  notifAction: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  notifActionText: { fontSize: 11, fontWeight: '600' },
 });
 
 export default ChatScreen;

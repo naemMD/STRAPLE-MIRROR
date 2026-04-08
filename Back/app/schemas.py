@@ -68,6 +68,7 @@ class ConversationRead(BaseModel):
     client_lastname: str
     last_message: str | None
     last_message_time: datetime | None
+    unread_count: int = 0
 
 class CoachInvitation(Base):
     __tablename__ = 'coach_invitations'

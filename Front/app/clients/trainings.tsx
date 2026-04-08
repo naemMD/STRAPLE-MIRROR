@@ -11,7 +11,6 @@ import api from '@/services/api';
 import { getUniqueMuscles, getExercisesByMuscle, getSafeExercises, LOCAL_EXERCISES } from '@/constants/exercisesData';
 import { getUserDetails } from '@/services/authStorage';
 import YouTubeVideoModal from '@/components/YouTubeVideoModal';
-import NotifyCoachToggle from '@/components/NotifyCoachToggle';
 
 LocaleConfig.locales['en'] = {
   monthNames: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
@@ -72,7 +71,6 @@ const TrainingDashboard = () => {
   const [ratingFeedback, setRatingFeedback] = useState('');
   const [submittingRating, setSubmittingRating] = useState(false);
   const [isEditingRating, setIsEditingRating] = useState(false);
-  const [notifyCoach, setNotifyCoach] = useState(false);
   const [userCoachId, setUserCoachId] = useState<number | null>(null);
 
   const openVideoModal = (name: string, url?: string, fromModal?: 'addExo' | 'detail') => {
@@ -607,7 +605,7 @@ const TrainingDashboard = () => {
         })),
       };
       await api.put(`/workouts/${selectedWorkout.id}`, payload);
-      if (notifyCoach && userCoachId) {
+      if (userCoachId) {
         try {
           await api.post('/messages/notify-coach', { type: 'workout_updated', label: selectedWorkout.name });
         } catch (e) { console.log('Notify coach error:', e); }
@@ -923,12 +921,6 @@ const TrainingDashboard = () => {
 
                             <View style={{height: 20}} />
                         </ScrollView>
-
-                        {userCoachId && (
-                          <View style={{marginTop: 10}}>
-                            <NotifyCoachToggle enabled={notifyCoach} onToggle={setNotifyCoach} />
-                          </View>
-                        )}
 
                         {/* Save button */}
                         <TouchableOpacity style={styles.saveWorkoutBtn} onPress={handleSaveWorkout} disabled={saving}>

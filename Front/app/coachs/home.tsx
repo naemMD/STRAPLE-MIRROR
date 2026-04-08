@@ -1,90 +1,76 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Dimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Pressable, TextInput, FlatList } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { getUserDetails } from '@/services/authStorage';
 import api from '@/services/api';
-import Toast from 'react-native-toast-message';
+import GroupedBarChart from '@/components/charts/GroupedBarChart';
+import DonutChart from '@/components/charts/DonutChart';
+import SimpleLineChart from '@/components/charts/SimpleLineChart';
+
+const GOAL_CONFIG: Record<string, { label: string; color: string }> = {
+  lose_weight: { label: 'Weight Loss', color: '#E74C3C' },
+  gain_muscle: { label: 'Muscle Gain', color: '#2ECC71' },
+  maintain_weight: { label: 'Maintain', color: '#F1C40F' },
+  not_set: { label: 'Not Set', color: '#888' },
+};
 
 export default function CoachHomepage() {
   const insets = useSafeAreaInsets();
   const navigation = useRouter();
   const [summary, setSummary] = useState<any>(null);
-  const [attentionData, setAttentionData] = useState<any>(null);
-  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [coachName, setCoachName] = useState('');
+  const [coachId, setCoachId] = useState<number | null>(null);
 
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allClients, setAllClients] = useState<any[]>([]);
 
-  // --- 🔥 CONFIGURATION DES OBJECTIFS (Traductions, Icônes & Couleurs) ---
-  const goalConfig: { [key: string]: { label: string; color: string } } = {
-    'lose_weight': { label: 'Weight Loss', color: '#E74C3C' },
-    'gain_muscle': { label: 'Muscle Gain', color: '#2ECC71' },
-    'maintain_weight': { label: 'Maintain', color: '#F1C40F' }
-  };
+  // Workout detail modal
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
+
+  // Activity modal
+  const [showActivityModal, setShowActivityModal] = useState(false);
 
   const fetchData = async () => {
     try {
       const user = await getUserDetails();
-
       if (user?.id) {
         setCoachName(user.firstname);
+        setCoachId(user.id);
 
-        const [summaryResponse, attentionResponse, requestsResponse] = await Promise.all([
-            api.get(`/coaches/${user.id}/home-summary`),
-            api.get(`/coaches/me/needs-attention?current_user_id=${user.id}`),
-            api.get(`/coaches/me/pending-requests?current_user_id=${user.id}`)
+        const [summaryRes, clientsRes] = await Promise.all([
+          api.get(`/coaches/${user.id}/home-summary`),
+          api.get(`/coaches/${user.id}/clients`),
         ]);
 
-        setSummary(summaryResponse.data);
-        setAttentionData(attentionResponse.data);
-        setIncomingRequests(requestsResponse.data);
+        setSummary(summaryRes.data);
+        setAllClients(clientsRes.data);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData();
   }, []);
 
-  const handleRequestAction = async (requestId: number, status: 'accepted' | 'rejected') => {
-    try {
-      const user = await getUserDetails();
-
-      await api.patch(`/coaches/requests/${requestId}?status=${status}&current_user_id=${user?.id}`);
-
-      Toast.show({
-        type: 'success',
-        text1: status === 'accepted' ? 'Client Assigned' : 'Request Declined',
-        text2: status === 'accepted' ? 'New client added to your roster.' : 'The request has been removed.'
-      });
-
-      setIsModalVisible(false);
-      fetchData(); 
-    } catch (e) {
-      Toast.show({ type: 'error', text1: 'Error updating request' });
-    }
-  };
-
-    const currentClientGoal = goalConfig[selectedRequest?.client_goal] || {
-        label: 'Not specified',
-        color: '#8A8D91' 
-    };
+  const filteredClients = searchQuery.trim()
+    ? allClients.filter((c: any) =>
+        `${c.firstname} ${c.lastname}`.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : [];
 
   if (loading) {
     return (
@@ -94,13 +80,82 @@ export default function CoachHomepage() {
     );
   }
 
+  const kpi = summary?.kpi || {};
+
+  // Chart data
+  const weeklyActivityData = (summary?.weekly_activity || []).map((w: any) => ({
+    label: w.week_start.slice(5),
+    value1: w.total || 0,
+    value2: w.completed || 0,
+  }));
+
+  const goalSegments = Object.entries(summary?.goal_distribution || {})
+    .map(([key, value]) => ({
+      label: GOAL_CONFIG[key]?.label || key,
+      value: value as number,
+      color: GOAL_CONFIG[key]?.color || '#888',
+    }))
+    .filter(s => s.value > 0);
+
+  const satisfactionData = (summary?.avg_satisfaction_weekly || []).map((w: any) => ({
+    label: w.week_start.slice(5),
+    value: w.avg_rating,
+  }));
+
+  const leaderboard = summary?.leaderboard || [];
+
+  const renderActivityCard = (a: any) => {
+    const icon = a.type.startsWith('meal') ? 'restaurant-outline' :
+                 a.type.startsWith('workout') ? 'barbell-outline' :
+                 a.type.startsWith('profile') ? 'person-outline' : 'notifications-outline';
+    const typeLabel = ({ meal_created: 'New Meal', meal_updated: 'Meal Updated', workout_updated: 'Workout Updated', profile_updated: 'Profile Updated' } as Record<string, string>)[a.type] || 'Update';
+    const iconColor = a.type.startsWith('meal') ? '#2ecc71' :
+                      a.type.startsWith('workout') ? '#3498DB' : '#9b59b6';
+    return (
+      <TouchableOpacity
+        key={a.id}
+        style={styles.activityCard}
+        onPress={() => {
+          setShowActivityModal(false);
+          const p: any = { clientId: a.client_id, initialDate: a.date || '' };
+          if (a.type?.startsWith('meal')) p.openMeal = 'true';
+          navigation.push({ pathname: '/coachs/client-details' as any, params: p });
+        }}
+      >
+        <View style={[styles.activityIcon, { backgroundColor: `${iconColor}20` }]}>
+          <Ionicons name={icon as any} size={18} color={iconColor} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.activityName}>{a.client_name}</Text>
+          <Text style={styles.activityDetail}>{typeLabel}: {a.label}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.activityTime}>{getTimeAgo(a.timestamp)}</Text>
+          {!a.is_read && <View style={styles.unreadDot} />}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const getTimeAgo = (timestamp: string) => {
+    if (!timestamp) return '';
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      
+
       <View style={styles.header}>
-          <Text style={styles.greeting}>Hello, {coachName} 👋</Text>
-          <Text style={styles.subtitle}>Here is your daily overview</Text>
+        <Text style={styles.greeting}>Hello, {coachName} 👋</Text>
+        <Text style={styles.subtitle}>Your coaching dashboard</Text>
       </View>
 
       <ScrollView
@@ -109,198 +164,238 @@ export default function CoachHomepage() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
         showsVerticalScrollIndicator={false}
       >
-        
-        {/* --- KPIs SECTION --- */}
-        <View style={styles.kpiContainer}>
-            {/* KPI: TOTAL CLIENTS (CLIQUABLE) */}
-            <TouchableOpacity 
-              style={styles.kpiCard} 
-              activeOpacity={0.7}
-              onPress={() => navigation.push('/coachs/client-list')}
-            >
-                <View style={styles.iconBg}>
-                    <Ionicons name="people" size={24} color="#3498DB" />
-                </View>
-                <Text style={styles.kpiValue}>{summary?.kpi?.total_clients || 0}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.kpiLabel}>Total Clients</Text>
-                  <Ionicons name="chevron-forward" size={12} color="#aaa" style={{ marginLeft: 4 }} />
-                </View>
+        {/* Search bar */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={18} color="#888" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search a client..."
+            placeholderTextColor="#666"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#888" />
             </TouchableOpacity>
+          )}
+        </View>
 
-            {/* KPI: ACTIVE TODAY */}
-            <View style={styles.kpiCard}>
-                <View style={[styles.iconBg, {backgroundColor: 'rgba(46, 204, 113, 0.2)'}]}>
-                    <Ionicons name="flash" size={24} color="#2ecc71" />
+        {/* Search results */}
+        {searchQuery.trim().length > 0 && (
+          <View style={styles.searchResults}>
+            {filteredClients.length > 0 ? filteredClients.map((c: any) => (
+              <TouchableOpacity
+                key={c.id}
+                style={styles.searchResultItem}
+                onPress={() => {
+                  setSearchQuery('');
+                  navigation.push({ pathname: '/coachs/client-details', params: { clientId: c.id } });
+                }}
+              >
+                <View style={styles.searchAvatar}>
+                  <Text style={styles.searchAvatarText}>{c.firstname?.[0]?.toUpperCase() || '?'}</Text>
                 </View>
-                <Text style={styles.kpiValue}>{summary?.kpi?.active_today || 0}</Text>
-                <Text style={styles.kpiLabel}>Active Today</Text>
+                <Text style={styles.searchResultName}>{c.firstname} {c.lastname}</Text>
+                <Ionicons name="chevron-forward" size={16} color="#666" />
+              </TouchableOpacity>
+            )) : (
+              <Text style={{ color: '#666', textAlign: 'center', paddingVertical: 12 }}>No client found</Text>
+            )}
+          </View>
+        )}
+
+        {/* Notification badges */}
+        {(summary?.unread_messages > 0 || summary?.pending_requests > 0) && (
+          <View style={styles.notifRow}>
+            {summary.unread_messages > 0 && (
+              <TouchableOpacity style={styles.notifBadge} onPress={() => navigation.push('/coachs/message-list')}>
+                <Ionicons name="chatbubbles" size={16} color="#e74c3c" />
+                <Text style={styles.notifText}>{summary.unread_messages} unread message{summary.unread_messages > 1 ? 's' : ''}</Text>
+                <Ionicons name="chevron-forward" size={14} color="#888" />
+              </TouchableOpacity>
+            )}
+            {summary.pending_requests > 0 && (
+              <TouchableOpacity style={styles.notifBadge} onPress={() => navigation.push('/coachs/client-list')}>
+                <Ionicons name="person-add" size={16} color="#3498DB" />
+                <Text style={styles.notifText}>{summary.pending_requests} pending request{summary.pending_requests > 1 ? 's' : ''}</Text>
+                <Ionicons name="chevron-forward" size={14} color="#888" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Recent Activity */}
+        {(summary?.recent_activity || []).length > 0 && (
+          <View style={styles.activitySection}>
+            <Text style={styles.activityTitle}>Recent Activity</Text>
+            {(summary.recent_activity as any[]).slice(0, 5).map((a: any) => renderActivityCard(a))}
+            {(summary.recent_activity || []).length > 5 && (
+              <TouchableOpacity style={styles.seeMoreBtn} onPress={() => setShowActivityModal(true)}>
+                <Text style={styles.seeMoreText}>See all activity</Text>
+                <Ionicons name="chevron-forward" size={14} color="#3498DB" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* KPI Cards */}
+        <View style={styles.kpiRow}>
+          <TouchableOpacity style={styles.kpiCard} activeOpacity={0.7} onPress={() => navigation.push('/coachs/client-list')}>
+            <View style={styles.kpiIcon}>
+              <Ionicons name="people" size={20} color="#3498DB" />
             </View>
+            <Text style={styles.kpiValue}>{kpi.total_clients || 0}</Text>
+            <Text style={styles.kpiLabel}>Clients</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.kpiCard} activeOpacity={0.7} onPress={() => setShowWorkoutModal(true)}>
+            <View style={[styles.kpiIcon, { backgroundColor: 'rgba(46,204,113,0.15)' }]}>
+              <Ionicons name="barbell" size={20} color="#2ecc71" />
+            </View>
+            <Text style={styles.kpiValue}>{kpi.week_workouts_completed || 0}<Text style={styles.kpiTotal}>/{kpi.week_workouts_total || 0}</Text></Text>
+            <Text style={styles.kpiLabel}>This Week</Text>
+          </TouchableOpacity>
+
+          <View style={styles.kpiCard}>
+            <View style={[styles.kpiIcon, { backgroundColor: 'rgba(243,156,18,0.15)' }]}>
+              <Ionicons name="star" size={20} color="#f39c12" />
+            </View>
+            <Text style={styles.kpiValue}>{kpi.avg_rating?.toFixed(1) || '-'}</Text>
+            <Text style={styles.kpiLabel}>Avg Rating</Text>
+          </View>
+
+          <View style={styles.kpiCard}>
+            <View style={[styles.kpiIcon, { backgroundColor: 'rgba(155,89,182,0.15)' }]}>
+              <Ionicons name="checkmark-done" size={20} color="#9b59b6" />
+            </View>
+            <Text style={styles.kpiValue}>{kpi.avg_completion != null ? `${kpi.avg_completion}%` : '-'}</Text>
+            <Text style={styles.kpiLabel}>Completion</Text>
+          </View>
         </View>
 
-        {/* --- ALERTS SECTION --- */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>⚠️ Needs Attention</Text>
-          
-          {(attentionData && attentionData.total_alerts > 0) || incomingRequests.length > 0 ? (
-              <>
-                  {incomingRequests.length > 0 && (
-                      <TouchableOpacity 
-                          style={[styles.alertCard, { borderLeftColor: '#3498DB', backgroundColor: 'rgba(52, 152, 219, 0.1)' }]}
-                          onPress={() => {
-                              setSelectedRequest(incomingRequests[0]);
-                              setIsModalVisible(true);
-                          }}
-                      >
-                          <View style={styles.cardHeader}>
-                              <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}>
-                                  <Ionicons name="person-add" size={24} color="#3498DB" />
-                              </View>
-                              <View style={{flex: 1, marginLeft: 15}}>
-                                  <Text style={styles.clientName}>Coaching Request</Text>
-                                  <Text style={[styles.alertIssue, { color: '#3498DB' }]}>
-                                      {incomingRequests.length} user(s) want to be your client
-                                  </Text>
-                              </View>
-                              <View style={styles.viewBadge}>
-                                  <Text style={styles.viewBadgeText}>VIEW</Text>
-                              </View>
-                          </View>
-                      </TouchableOpacity>
-                  )}
+        {/* Weekly Activity */}
+        {weeklyActivityData.length > 0 && (
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Weekly Activity (All Clients)</Text>
+            <GroupedBarChart data={weeklyActivityData} color1="#3498DB" color2="#2ecc71" label1="Planned" label2="Completed" />
+          </View>
+        )}
 
-                  {attentionData?.unread_messages > 0 && (
-                      <TouchableOpacity 
-                          style={[styles.alertCard, { borderLeftColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.1)' }]}
-                          onPress={() => navigation.push('/coachs/message-list')}
-                      >
-                          <View style={styles.cardHeader}>
-                              <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(231, 76, 60, 0.2)' }]}>
-                                  <Ionicons name="chatbubbles-outline" size={24} color="#e74c3c" />
-                              </View>
-                              <View style={{flex: 1, marginLeft: 15}}>
-                                  <Text style={styles.clientName}>Unread Messages</Text>
-                                  <Text style={styles.alertIssue}>
-                                      {attentionData.unread_messages} new message(s) received
-                                  </Text>
-                              </View>
-                              <Ionicons name="chevron-forward" size={20} color="#8A8D91" />
-                          </View>
-                      </TouchableOpacity>
-                  )}
-              </>
-          ) : (
-              <View style={styles.emptyState}>
-                  <Ionicons name="checkmark-circle" size={40} color="#2ecc71" />
-                  <Text style={styles.emptyText}>You're all caught up!</Text>
-              </View>
-          )}
-        </View>
+        {/* Goal Distribution + Satisfaction side by side or stacked */}
+        {goalSegments.length > 0 && (
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Client Goals</Text>
+            <DonutChart segments={goalSegments} />
+          </View>
+        )}
 
-        {/* --- TOP PERFORMERS SECTION --- */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>🏆 Top Performers (Yesterday)</Text>
-          {summary?.top_performers && summary.top_performers.length > 0 ? (
-              summary.top_performers.map((client: any, index: number) => (
-                <View key={client.id} style={styles.performerCard}>
-                    <View style={styles.cardHeader}>
-                        <View style={[styles.avatarPlaceholder, {backgroundColor: '#f1c40f'}]}>
-                            <Text style={[styles.avatarText, {color: '#1A1F2B'}]}>{index + 1}</Text>
-                        </View>
-                        <View style={{flex: 1, marginLeft: 10}}>
-                            <Text style={styles.clientName}>{client.name}</Text>
-                            <View style={styles.badgeContainer}>
-                                <Text style={styles.badgeText}>{client.score}</Text>
-                            </View>
-                        </View>
-                        <View style={{alignItems: 'flex-end'}}>
-                             <Text style={styles.performerValue}>{client.value} kcal</Text>
-                             <Text style={styles.performerGoal}>Goal: {client.goal}</Text>
-                        </View>
-                    </View>
+        {satisfactionData.length > 0 && (
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Average Satisfaction</Text>
+            <SimpleLineChart data={satisfactionData} color="#f39c12" suffix="" />
+          </View>
+        )}
+
+        {/* Leaderboard */}
+        {leaderboard.length > 0 && (
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>Client Leaderboard</Text>
+            {leaderboard.map((c: any, i: number) => (
+              <TouchableOpacity
+                key={c.id}
+                style={styles.leaderRow}
+                onPress={() => navigation.push({ pathname: '/coachs/client-details', params: { clientId: c.id } })}
+              >
+                <View style={[styles.rankBadge, i === 0 && { backgroundColor: 'rgba(241,196,15,0.2)' }, i === 1 && { backgroundColor: 'rgba(189,195,199,0.2)' }, i === 2 && { backgroundColor: 'rgba(205,127,50,0.2)' }]}>
+                  <Text style={[styles.rankText, i === 0 && { color: '#f1c40f' }, i === 1 && { color: '#bdc3c7' }, i === 2 && { color: '#cd7f32' }]}>{i + 1}</Text>
                 </View>
-              ))
-          ) : (
-              <Text style={{color: '#888', fontStyle: 'italic'}}>No data recorded yesterday.</Text>
-          )}
-        </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.leaderName}>{c.name}</Text>
+                  <Text style={styles.leaderMeta}>{c.completed}/{c.total} workouts · {c.completion}%</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.leaderFreq}>{c.sessions_per_week}</Text>
+                  <Text style={styles.leaderFreqLabel}>sess/wk</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* --- CLIENT PROFILE PREVIEW MODAL --- */}
-      <Modal visible={isModalVisible} animationType="slide" transparent onRequestClose={() => setIsModalVisible(false)}>
-          <Pressable style={styles.modalOverlay} onPress={() => setIsModalVisible(false)}>
-              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-                  {selectedRequest && (
-                      <>
-                          <View style={styles.modalHeaderInfo}>
-                              <View style={styles.avatarLarge}>
-                                  <Text style={styles.avatarLargeText}>{selectedRequest.client_name[0]}</Text>
-                              </View>
-                              <Text style={styles.modalName}>{selectedRequest.client_name}</Text>
-                              <Text style={styles.modalEmail}>{selectedRequest.client_email}</Text>
-                              
-                              <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 8}}>
-                                  <Ionicons name="location-outline" size={14} color="#8A8D91" />
-                                  <Text style={{color: '#8A8D91', marginLeft: 4}}>
-                                      {selectedRequest.client_city || "City not specified"}
-                                  </Text>
-                              </View>
-                          </View>
+      {/* Workout Detail Modal */}
+      <Modal visible={showWorkoutModal} transparent animationType="slide" onRequestClose={() => setShowWorkoutModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowWorkoutModal(false)}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>This Week's Workouts</Text>
+              <TouchableOpacity onPress={() => setShowWorkoutModal(false)}>
+                <Ionicons name="close" size={24} color="#888" />
+              </TouchableOpacity>
+            </View>
 
-                          <View style={styles.metricsGrid}>
-                              <View style={styles.metricRow}>
-                                  <View style={styles.metricItem}>
-                                      <Text style={[styles.metricVal, { color: currentClientGoal.color }]}>
-                                          {currentClientGoal.label}
-                                      </Text>
-                                      <Text style={styles.metricLab}>Goal</Text>
-                                  </View>
+            <View style={styles.modalSummary}>
+              <Text style={styles.modalSummaryText}>
+                {kpi.week_workouts_completed || 0} completed out of {kpi.week_workouts_total || 0} planned
+              </Text>
+            </View>
 
-                                  <View style={styles.metricItem}>
-                                      <Ionicons name="calendar-outline" size={22} color="#3498DB" />
-                                      <Text style={styles.metricVal}>{selectedRequest.client_age || '--'} y/o</Text>
-                                      <Text style={styles.metricLab}>Age</Text>
-                                  </View>
-                              </View>
-
-                              <View style={styles.divider} />
-
-                              <View style={styles.metricRow}>
-                                  <View style={styles.metricItem}>
-                                      <Ionicons name="speedometer-outline" size={22} color="#3498DB" />
-                                      <Text style={styles.metricVal}>{selectedRequest.client_weight || '--'} kg</Text>
-                                      <Text style={styles.metricLab}>Weight</Text>
-                                  </View>
-                                  <View style={styles.metricItem}>
-                                      <Ionicons name="resize-outline" size={22} color="#3498DB" />
-                                      <Text style={styles.metricVal}>{selectedRequest.client_height || '--'} cm</Text>
-                                      <Text style={styles.metricLab}>Height</Text>
-                                  </View>
-                              </View>
-                          </View>
-
-                          <View style={styles.modalActions}>
-                              <TouchableOpacity 
-                                  style={[styles.modalBtn, styles.declineBtn]} 
-                                  onPress={() => handleRequestAction(selectedRequest.request_id, 'rejected')}
-                              >
-                                  <Text style={styles.declineText}>Decline</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity 
-                                  style={[styles.modalBtn, styles.acceptBtn]} 
-                                  onPress={() => handleRequestAction(selectedRequest.request_id, 'accepted')}
-                              >
-                                  <Text style={styles.acceptText}>Accept Client</Text>
-                              </TouchableOpacity>
-                          </View>
-                          
-                          <TouchableOpacity style={styles.closeModal} onPress={() => setIsModalVisible(false)}>
-                              <Text style={{color: '#8A8D91', fontWeight: 'bold'}}>Close</Text>
-                          </TouchableOpacity>
-                      </>
-                  )}
-              </Pressable>
+            <FlatList
+              data={summary?.clients_week_workouts || []}
+              keyExtractor={(item) => item.id.toString()}
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 400 }}
+              renderItem={({ item }) => {
+                const pct = item.total > 0 ? Math.round(item.completed / item.total * 100) : 0;
+                const barColor = pct === 100 ? '#2ecc71' : pct > 0 ? '#f39c12' : '#e74c3c';
+                return (
+                  <TouchableOpacity
+                    style={styles.clientWorkoutRow}
+                    onPress={() => {
+                      setShowWorkoutModal(false);
+                      navigation.push({ pathname: '/coachs/client-details', params: { clientId: item.id } });
+                    }}
+                  >
+                    <View style={styles.clientWorkoutAvatar}>
+                      <Text style={styles.clientWorkoutAvatarText}>{item.name?.[0]?.toUpperCase() || '?'}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.clientWorkoutName}>{item.name}</Text>
+                      <View style={styles.progressBarBg}>
+                        <View style={[styles.progressBarFill, { width: `${pct}%`, backgroundColor: barColor }]} />
+                      </View>
+                    </View>
+                    <Text style={[styles.clientWorkoutCount, { color: barColor }]}>{item.completed}/{item.total}</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#555" style={{ marginLeft: 8 }} />
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={{ color: '#666', textAlign: 'center', paddingVertical: 20 }}>No workouts scheduled this week</Text>
+              }
+            />
           </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Activity Modal */}
+      <Modal visible={showActivityModal} transparent animationType="slide" onRequestClose={() => setShowActivityModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowActivityModal(false)}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>All Activity</Text>
+              <TouchableOpacity onPress={() => setShowActivityModal(false)}>
+                <Ionicons name="close" size={24} color="#888" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
+              {(summary?.recent_activity || []).map((a: any) => renderActivityCard(a))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -312,51 +407,68 @@ const styles = StyleSheet.create({
   greeting: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   subtitle: { color: '#888', fontSize: 14, marginTop: 5 },
   content: { padding: 16 },
-  kpiContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
-  kpiCard: { backgroundColor: '#2A4562', width: '48%', padding: 15, borderRadius: 15, alignItems: 'flex-start' },
-  iconBg: { backgroundColor: 'rgba(52, 152, 219, 0.2)', padding: 8, borderRadius: 10, marginBottom: 10 },
-  kpiValue: { color: 'white', fontSize: 32, fontWeight: 'bold' },
-  kpiLabel: { color: '#aaa', fontSize: 14 },
-  sectionContainer: { marginBottom: 25 },
-  sectionTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
-  alertCard: { borderRadius: 12, padding: 15, marginBottom: 12, borderLeftWidth: 4 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  avatarPlaceholder: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#2A4562', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  clientName: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
-  alertIssue: { fontWeight: 'bold', fontSize: 12, marginTop: 4 },
-  viewBadge: { backgroundColor: '#3498DB', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  viewBadgeText: { color: 'white', fontWeight: 'bold', fontSize: 10 },
-  emptyState: { backgroundColor: '#2A4562', borderRadius: 12, padding: 20, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
-  emptyText: { color: 'white', marginLeft: 10, fontSize: 16 },
-  performerCard: { backgroundColor: '#2A4562', borderRadius: 12, padding: 15, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: '#f1c40f' },
-  badgeContainer: { backgroundColor: 'rgba(46, 204, 113, 0.2)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 5, alignSelf: 'flex-start', marginTop: 4 },
-  badgeText: { color: '#2ecc71', fontSize: 12, fontWeight: 'bold' },
-  performerValue: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  performerGoal: { color: '#aaa', fontSize: 12 },
 
-  // MODAL STYLES
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#1A1F2B', width: '100%', borderRadius: 25, padding: 25, alignItems: 'center', borderWidth: 1, borderColor: '#3498DB' },
-  modalHeaderInfo: { alignItems: 'center', marginBottom: 25 },
-  avatarLarge: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
-  avatarLargeText: { color: 'white', fontSize: 36, fontWeight: 'bold' },
-  modalName: { color: 'white', fontSize: 24, fontWeight: 'bold' },
-  modalEmail: { color: '#8A8D91', marginTop: 4 },
-  
-  metricsGrid: { width: '100%', marginBottom: 35, backgroundColor: '#2A4562', padding: 20, borderRadius: 20 },
-  metricRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 15, width: '100%' },
-  metricItem: { alignItems: 'center', flex: 1 },
-  iconGoalCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  metricVal: { color: 'white', fontWeight: 'bold', marginTop: 8, fontSize: 14, textAlign: 'center' },
-  metricLab: { color: '#8A8D91', fontSize: 10, textTransform: 'uppercase', marginTop: 2 },
-  
-  modalActions: { flexDirection: 'row', gap: 15, width: '100%' },
-  modalBtn: { flex: 1, paddingVertical: 16, borderRadius: 15, alignItems: 'center' },
-  declineBtn: { backgroundColor: 'rgba(231, 76, 60, 0.1)', borderWidth: 1, borderColor: '#e74c3c' },
-  acceptBtn: { backgroundColor: '#2ECC71' },
-  declineText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 16 },
-  acceptText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  closeModal: { marginTop: 25 }
+  // Search
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#232D3F', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12, gap: 10 },
+  searchInput: { flex: 1, color: 'white', fontSize: 15 },
+  searchResults: { backgroundColor: '#232D3F', borderRadius: 12, marginBottom: 12, overflow: 'hidden' },
+  searchResultItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  searchAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center' },
+  searchAvatarText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  searchResultName: { flex: 1, color: 'white', fontSize: 15, marginLeft: 12 },
+
+  // Notifications
+  notifRow: { gap: 8, marginBottom: 14 },
+  notifBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#232D3F', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  notifText: { flex: 1, color: '#ccc', fontSize: 13 },
+
+  // KPI
+  kpiRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
+  kpiCard: { width: '48%', backgroundColor: '#232D3F', borderRadius: 14, padding: 14, alignItems: 'center', marginBottom: 8 },
+  kpiIcon: { backgroundColor: 'rgba(52,152,219,0.15)', padding: 8, borderRadius: 10, marginBottom: 8 },
+  kpiValue: { color: 'white', fontSize: 26, fontWeight: 'bold' },
+  kpiTotal: { color: '#888', fontSize: 16, fontWeight: 'normal' },
+  kpiLabel: { color: '#888', fontSize: 11, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Activity feed
+  activitySection: { marginBottom: 16 },
+  activityTitle: { color: 'white', fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
+  activityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#232D3F', borderRadius: 12, padding: 12, marginBottom: 8 },
+  activityIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  activityName: { color: 'white', fontWeight: '600', fontSize: 13 },
+  activityDetail: { color: '#888', fontSize: 12, marginTop: 2 },
+  activityTime: { color: '#555', fontSize: 11 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#e74c3c', marginTop: 4 },
+  seeMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, marginTop: 4 },
+  seeMoreText: { color: '#3498DB', fontSize: 13, fontWeight: '600' },
+
+  // Charts
+  chartCard: { backgroundColor: '#232D3F', borderRadius: 14, padding: 16, marginBottom: 14 },
+  chartTitle: { color: 'white', fontSize: 15, fontWeight: 'bold', marginBottom: 14 },
+
+  // Leaderboard
+  leaderRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  rankBadge: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+  rankText: { color: '#888', fontWeight: 'bold', fontSize: 14 },
+  leaderName: { color: 'white', fontWeight: '600', fontSize: 14 },
+  leaderMeta: { color: '#666', fontSize: 11, marginTop: 2 },
+  leaderFreq: { color: '#2ecc71', fontWeight: 'bold', fontSize: 18 },
+  leaderFreqLabel: { color: '#888', fontSize: 9, textTransform: 'uppercase' },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#1A1F2B', width: '100%', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#2A4562', maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  modalSummary: { backgroundColor: '#2A4562', borderRadius: 10, padding: 12, marginBottom: 16, alignItems: 'center' },
+  modalSummaryText: { color: '#3498DB', fontWeight: '600', fontSize: 14 },
+
+  clientWorkoutRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  clientWorkoutAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center' },
+  clientWorkoutAvatarText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  clientWorkoutName: { color: 'white', fontSize: 14, fontWeight: '500', marginBottom: 6 },
+  clientWorkoutCount: { fontWeight: 'bold', fontSize: 16 },
+
+  progressBarBg: { height: 5, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
+  progressBarFill: { height: '100%', borderRadius: 3 },
 });

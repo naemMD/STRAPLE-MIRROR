@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, ScrollView,
   ActivityIndicator, Dimensions, Modal, TextInput,
-  KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Image
+  KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Image, Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -92,6 +92,10 @@ const ClientDetailsScreen = () => {
   // --- STATS VIEW TOGGLE ---
   const [showStats, setShowStats] = useState(false);
 
+  // --- MEAL DETAIL MODAL ---
+  const [mealDetailVisible, setMealDetailVisible] = useState(false);
+  const [selectedMealDetail, setSelectedMealDetail] = useState<any>(null);
+
   // --- SCANNER DETAIL MODAL STATES ---
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false);
   const [scannedFood, setScannedFood] = useState<any>(null);
@@ -99,6 +103,25 @@ const ClientDetailsScreen = () => {
   const [scanGrammage, setScanGrammage] = useState('');
 
   const clientId = params.clientId;
+
+  // If navigated with an initialDate param, set the date and force Daily View
+  useEffect(() => {
+    if (params.initialDate && typeof params.initialDate === 'string') {
+      const d = new Date(params.initialDate + 'T12:00:00');
+      if (!isNaN(d.getTime())) {
+        setSelectedDate(d);
+        setShowStats(false);
+      }
+    }
+  }, [params.initialDate]);
+
+  // Auto-open first meal when navigated from a meal notification
+  useEffect(() => {
+    if (params.openMeal === 'true' && clientData?.meals_today?.length > 0 && !mealDetailVisible) {
+      setSelectedMealDetail(clientData.meals_today[0]);
+      setMealDetailVisible(true);
+    }
+  }, [clientData, params.openMeal]);
 
   const loadData = async () => {
     setLoading(true);
@@ -656,7 +679,7 @@ const ClientDetailsScreen = () => {
                     {clientData?.meals_today?.length > 0 ? (
                         clientData.meals_today.map((meal: any) => (
                             <View key={meal.id} style={styles.displayCard}>
-                                <TouchableOpacity style={{flex: 1, flexDirection: 'row', alignItems: 'center'}} onPress={() => toggleMealExpand(meal.id)}>
+                                <TouchableOpacity style={{flex: 1, flexDirection: 'row', alignItems: 'center'}} onPress={() => { setSelectedMealDetail(meal); setMealDetailVisible(true); }}>
                                     <Ionicons name={meal.is_consumed ? "checkmark-circle" : "ellipse-outline"} size={22} color={meal.is_consumed ? "#2ecc71" : "#f39c12"} style={{marginRight: 10}} />
                                     <View style={{flex: 1}}>
                                         <Text style={[styles.listName, meal.is_consumed && styles.completedText]}>{meal.name}</Text>
@@ -664,28 +687,12 @@ const ClientDetailsScreen = () => {
                                             {meal.is_consumed ? 'Done' : 'Pending'} • {meal.calories || meal.total_calories} kcal
                                         </Text>
                                     </View>
-                                    <Ionicons name={expandedMeals.includes(meal.id) ? "chevron-up" : "chevron-down"} size={20} color="#888" />
+                                    <Ionicons name="eye-outline" size={20} color="#3498DB" />
                                 </TouchableOpacity>
                                 <View style={{flexDirection: 'row', marginLeft: 15, alignItems: 'center'}}>
                                     <TouchableOpacity onPress={() => openEditMealModal(meal)} style={{marginRight: 15}}><Ionicons name="create-outline" size={20} color="#3498DB" /></TouchableOpacity>
                                     <TouchableOpacity onPress={() => handleDeleteMeal(meal.id)}><Ionicons name="trash" size={20} color="#e74c3c" /></TouchableOpacity>
                                 </View>
-                                
-                                {expandedMeals.includes(meal.id) && (
-                                    <View style={styles.detailBox}>
-                                        {safeParseJSON(meal.items || meal.aliments).length > 0 ? (
-                                            safeParseJSON(meal.items || meal.aliments).map((f: any, idx: number) => (
-                                                <View key={idx} style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
-                                                    <FoodImage uri={f.image} style={{width: 25, height: 25, borderRadius: 5, marginRight: 10}} iconSize={16} />
-                                                    <Text style={{color: '#ccc', flex: 1, fontSize: 13}} numberOfLines={1}>{f.name}</Text>
-                                                    <Text style={{color: '#888', fontSize: 12}}>{f.weight}g • {Math.round(f.macros?.energy || 0)} kcal</Text>
-                                                </View>
-                                            ))
-                                        ) : (
-                                            <Text style={{color: '#888', fontStyle: 'italic', fontSize: 12}}>No details provided.</Text>
-                                        )}
-                                    </View>
-                                )}
                             </View>
                         ))
                     ) : <Text style={styles.emptyText}>No meals scheduled.</Text>}
@@ -1202,6 +1209,81 @@ const ClientDetailsScreen = () => {
         </TouchableOpacity>
       </Modal>
 
+      {/* Meal Detail Modal */}
+      <Modal visible={mealDetailVisible} transparent animationType="slide" onRequestClose={() => setMealDetailVisible(false)}>
+        <Pressable style={styles.mealDetailOverlay} onPress={() => setMealDetailVisible(false)}>
+          <Pressable style={styles.mealDetailContent} onPress={(e) => e.stopPropagation()}>
+            {selectedMealDetail && (() => {
+              const foods = safeParseJSON(selectedMealDetail.items || selectedMealDetail.aliments);
+              const totalCal = selectedMealDetail.calories || selectedMealDetail.total_calories || 0;
+              const totalProt = selectedMealDetail.total_proteins || 0;
+              const totalCarbs = selectedMealDetail.total_carbohydrates || 0;
+              const totalFats = selectedMealDetail.total_lipids || 0;
+              return (
+                <>
+                  <View style={styles.mealDetailHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mealDetailTitle}>{selectedMealDetail.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <Ionicons name={selectedMealDetail.is_consumed ? "checkmark-circle" : "ellipse-outline"} size={16} color={selectedMealDetail.is_consumed ? "#2ecc71" : "#f39c12"} />
+                        <Text style={{ color: selectedMealDetail.is_consumed ? '#2ecc71' : '#f39c12', fontSize: 12, fontWeight: '600' }}>
+                          {selectedMealDetail.is_consumed ? 'Consumed' : 'Pending'}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity onPress={() => setMealDetailVisible(false)}>
+                      <Ionicons name="close" size={24} color="#888" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Macro summary */}
+                  <View style={styles.mealMacroRow}>
+                    <View style={styles.mealMacroItem}>
+                      <Text style={styles.mealMacroValue}>{Math.round(totalCal)}</Text>
+                      <Text style={styles.mealMacroLabel}>kcal</Text>
+                    </View>
+                    <View style={[styles.mealMacroItem, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.08)' }]}>
+                      <Text style={[styles.mealMacroValue, { color: '#e74c3c' }]}>{Number(totalProt).toFixed(1)}g</Text>
+                      <Text style={styles.mealMacroLabel}>Protein</Text>
+                    </View>
+                    <View style={[styles.mealMacroItem, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.08)' }]}>
+                      <Text style={[styles.mealMacroValue, { color: '#f39c12' }]}>{Number(totalCarbs).toFixed(1)}g</Text>
+                      <Text style={styles.mealMacroLabel}>Carbs</Text>
+                    </View>
+                    <View style={[styles.mealMacroItem, { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.08)' }]}>
+                      <Text style={[styles.mealMacroValue, { color: '#2ecc71' }]}>{Number(totalFats).toFixed(1)}g</Text>
+                      <Text style={styles.mealMacroLabel}>Fats</Text>
+                    </View>
+                  </View>
+
+                  {/* Ingredients */}
+                  <Text style={styles.mealIngredientsTitle}>Ingredients ({foods.length})</Text>
+                  <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                    {foods.length > 0 ? foods.map((f: any, idx: number) => (
+                      <View key={idx} style={styles.mealIngredientRow}>
+                        <FoodImage uri={f.image} style={{ width: 40, height: 40, borderRadius: 8, marginRight: 12 }} iconSize={20} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.mealIngredientName} numberOfLines={2}>{f.name}</Text>
+                          <Text style={styles.mealIngredientWeight}>{f.weight}g</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.mealIngredientCal}>{Math.round(f.macros?.energy || 0)} kcal</Text>
+                          <Text style={styles.mealIngredientMacros}>
+                            P:{Number(f.macros?.proteins || 0).toFixed(1)} C:{Number(f.macros?.carbohydrates || 0).toFixed(1)} F:{Number(f.macros?.lipids || 0).toFixed(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    )) : (
+                      <Text style={{ color: '#666', fontStyle: 'italic', textAlign: 'center', paddingVertical: 20 }}>No ingredients listed</Text>
+                    )}
+                  </ScrollView>
+                </>
+              );
+            })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Toast />
     </View>
   );
@@ -1319,7 +1401,23 @@ const styles = StyleSheet.create({
   layerRight: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   layerBottom: { flex: 1, width: '100%', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   corner: { position: 'absolute', width: 20, height: 20, borderColor: 'white' },
-  closeCameraButton: { position: 'absolute', bottom: 50, alignSelf:'center', backgroundColor:'white', width:60, height:60, borderRadius:30, justifyContent:'center', alignItems:'center' }
+  closeCameraButton: { position: 'absolute', bottom: 50, alignSelf:'center', backgroundColor:'white', width:60, height:60, borderRadius:30, justifyContent:'center', alignItems:'center' },
+
+  // Meal Detail Modal
+  mealDetailOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  mealDetailContent: { backgroundColor: '#1A1F2B', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '85%', borderTopWidth: 2, borderTopColor: '#2A4562' },
+  mealDetailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  mealDetailTitle: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  mealMacroRow: { flexDirection: 'row', backgroundColor: '#232D3F', borderRadius: 14, padding: 14, marginBottom: 16 },
+  mealMacroItem: { flex: 1, alignItems: 'center' },
+  mealMacroValue: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  mealMacroLabel: { color: '#888', fontSize: 10, marginTop: 2, textTransform: 'uppercase' },
+  mealIngredientsTitle: { color: '#888', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  mealIngredientRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#232D3F', borderRadius: 12, padding: 12, marginBottom: 8 },
+  mealIngredientName: { color: 'white', fontSize: 14, fontWeight: '500' },
+  mealIngredientWeight: { color: '#888', fontSize: 12, marginTop: 2 },
+  mealIngredientCal: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  mealIngredientMacros: { color: '#666', fontSize: 10, marginTop: 2 },
 });
 
 export default ClientDetailsScreen;

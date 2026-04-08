@@ -16,7 +16,6 @@ const MessagesListScreen = () => {
   const fetchConversations = async () => {
     try {
       const user = await getUserDetails();
-
       const response = await api.get(`/messages/conversations?current_user_id=${user.id}`);
       setConversations(response.data);
     } catch (error) {
@@ -32,26 +31,35 @@ const MessagesListScreen = () => {
     }, [])
   );
 
-  const renderItem = ({ item }: any) => (
-    <TouchableOpacity 
-      style={styles.convItem}
-      onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.client_id, name: item.client_firstname } })}
-    >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{item.client_firstname[0]}</Text>
-      </View>
-      <View style={styles.convDetails}>
-        <Text style={styles.convName}>{item.client_firstname} {item.client_lastname}</Text>
-        <Text style={styles.lastMessage} numberOfLines={1}>{item.last_message}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color="#8A8D91" />
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }: any) => {
+    const hasUnread = item.unread_count > 0;
+    return (
+      <TouchableOpacity
+        style={[styles.convItem, hasUnread && styles.convItemUnread]}
+        onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.client_id, name: item.client_firstname } })}
+      >
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{item.client_firstname[0]}</Text>
+          </View>
+          {hasUnread && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{item.unread_count > 9 ? '9+' : item.unread_count}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.convDetails}>
+          <Text style={[styles.convName, hasUnread && styles.convNameUnread]}>{item.client_firstname} {item.client_lastname}</Text>
+          <Text style={[styles.lastMessage, hasUnread && styles.lastMessageUnread]} numberOfLines={1}>{item.last_message}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color="#8A8D91" />
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={{ width: 28 }} />
       </View>
@@ -97,12 +105,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1A1F2B' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15, marginTop: 10 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: 'white' },
-  convItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2A4562', padding: 15, borderRadius: 12, marginBottom: 10 },
-  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  convItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#232D3F', padding: 15, borderRadius: 12, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: 'transparent' },
+  convItemUnread: { borderLeftColor: '#3498DB', backgroundColor: '#1E2C3D' },
+  avatarContainer: { position: 'relative', marginRight: 15 },
+  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  unreadBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#e74c3c', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
+  unreadBadgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
   convDetails: { flex: 1 },
   convName: { color: 'white', fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  convNameUnread: { color: '#3498DB' },
   lastMessage: { color: '#8A8D91', fontSize: 14 },
+  lastMessageUnread: { color: '#ccc', fontWeight: '600' },
   emptyText: { color: '#8A8D91', textAlign: 'center', marginTop: 50 },
   paginationContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, gap: 20 },
   paginationBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#2A4562', justifyContent: 'center', alignItems: 'center' },

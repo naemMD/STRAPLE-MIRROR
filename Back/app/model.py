@@ -1100,81 +1100,183 @@ async def get_client_details(session: AsyncSession, client_id: int, target_date:
 
 async def get_coach_home_summary(session: AsyncSession, coach_id: int):
     today = date.today()
-    yesterday = today - timedelta(days=1)
+    week_start = today - timedelta(days=today.weekday())  # Monday
 
-    res_total = await session.execute(
-        select(func.count(Users.id)).where(Users.coach_id == coach_id)
-    )
-    total_clients = res_total.scalar() or 0
-
-    res_active = await session.execute(
-        select(func.count(func.distinct(Users.id)))
-        .join(Meal, Users.id == Meal.user_id)
-        .where(and_(Users.coach_id == coach_id, func.date(Meal.hourtime) == today))
-    )
-    active_today = res_active.scalar() or 0
-
+    # --- Clients ---
     res_clients = await session.execute(select(Users).where(Users.coach_id == coach_id))
     clients = res_clients.scalars().all()
+    total_clients = len(clients)
+    client_ids = [c.id for c in clients]
 
-    alerts = []
-    top_performers = []
+    if not client_ids:
+        return {
+            "kpi": {"total_clients": 0, "week_workouts_completed": 0, "week_workouts_total": 0, "avg_rating": None, "avg_completion": None},
+            "clients_week_workouts": [],
+            "goal_distribution": {},
+            "weekly_activity": [],
+            "leaderboard": [],
+            "avg_satisfaction_weekly": [],
+            "unread_messages": 0,
+            "pending_requests": 0,
+        }
 
-    for client in clients:
-        res_cals = await session.execute(
-            select(func.sum(Meal.total_calories))
-            .where(and_(Meal.user_id == client.id, func.date(Meal.hourtime) == yesterday))
-        )
-        yesterday_cals = res_cals.scalar() or 0
-        yesterday_cals = round(yesterday_cals)
+    # --- This-week workouts (all clients) ---
+    wo_result = await session.execute(
+        select(Workout)
+        .where(Workout.user_id.in_(client_ids), func.date(Workout.scheduled_date) >= week_start, func.date(Workout.scheduled_date) <= today)
+        .options(selectinload(Workout.rating))
+    )
+    week_workouts = wo_result.scalars().all()
+    week_total = len(week_workouts)
+    week_completed = sum(1 for w in week_workouts if w.is_completed)
 
-        goal = client.daily_caloric_needs or 2000
+    # Per-client breakdown for this week
+    per_client: dict[int, dict] = {}
+    for w in week_workouts:
+        uid = w.user_id
+        if uid not in per_client:
+            per_client[uid] = {"total": 0, "completed": 0}
+        per_client[uid]["total"] += 1
+        if w.is_completed:
+            per_client[uid]["completed"] += 1
 
-        issue = None
-        if yesterday_cals == 0:
-            issue = "Did not log meals yesterday"
-        elif yesterday_cals < 800:
-            issue = "Severe deficit (< 800kcal)"
-        elif yesterday_cals > (goal + 500):
-            diff = yesterday_cals - goal
-            issue = f"Excess (+{int(diff)} kcal)"
+    clients_week_workouts = []
+    for c in clients:
+        data = per_client.get(c.id, {"total": 0, "completed": 0})
+        clients_week_workouts.append({
+            "id": c.id,
+            "name": f"{c.firstname} {c.lastname}",
+            "total": data["total"],
+            "completed": data["completed"],
+        })
+    clients_week_workouts.sort(key=lambda x: x["completed"], reverse=True)
 
-        if issue:
-            alerts.append({
-                "id": client.id,
-                "name": f"{client.firstname} {client.lastname}",
-                "issue": issue,
-                "value": yesterday_cals,
-                "goal": goal
-            })
+    # --- Last 30 days workouts for trends ---
+    start_30 = today - timedelta(days=30)
+    wo_30_result = await session.execute(
+        select(Workout)
+        .where(Workout.user_id.in_(client_ids), func.date(Workout.scheduled_date) >= start_30, func.date(Workout.scheduled_date) <= today)
+        .options(selectinload(Workout.rating))
+    )
+    workouts_30 = wo_30_result.scalars().all()
 
-        else:
-            lower_bound = goal * 0.9
-            upper_bound = goal * 1.1
+    # Avg rating (last 30d)
+    rated = [w for w in workouts_30 if w.rating]
+    avg_rating = round(sum(w.rating.overall_rating for w in rated) / len(rated), 1) if rated else None
 
-            if lower_bound <= yesterday_cals <= upper_bound:
-                diff_percent = abs(1 - (yesterday_cals / goal)) * 100
-                score_label = "Perfect" if diff_percent < 2 else "On Track"
+    # Avg completion (last 30d)
+    total_30 = len(workouts_30)
+    completed_30 = sum(1 for w in workouts_30 if w.is_completed)
+    avg_completion = round(completed_30 / total_30 * 100, 1) if total_30 else None
 
-                top_performers.append({
-                    "id": client.id,
-                    "name": f"{client.firstname} {client.lastname}",
-                    "score": score_label,
-                    "value": yesterday_cals,
-                    "goal": goal,
-                    "diff_percent": diff_percent
+    # Weekly activity buckets (last 30d)
+    weekly_act: dict[str, dict] = {}
+    for w in workouts_30:
+        wo_date = w.scheduled_date.date() if hasattr(w.scheduled_date, 'date') else w.scheduled_date
+        ws = wo_date - timedelta(days=wo_date.weekday())
+        key = str(ws)
+        if key not in weekly_act:
+            weekly_act[key] = {"week_start": key, "total": 0, "completed": 0}
+        weekly_act[key]["total"] += 1
+        if w.is_completed:
+            weekly_act[key]["completed"] += 1
+    weekly_activity = [weekly_act[k] for k in sorted(weekly_act.keys())]
+
+    # Avg satisfaction per week (last 30d)
+    weekly_sat: dict[str, list] = {}
+    for w in workouts_30:
+        if w.rating:
+            wo_date = w.scheduled_date.date() if hasattr(w.scheduled_date, 'date') else w.scheduled_date
+            ws = wo_date - timedelta(days=wo_date.weekday())
+            key = str(ws)
+            weekly_sat.setdefault(key, []).append(w.rating.overall_rating)
+    avg_satisfaction_weekly = [
+        {"week_start": k, "avg_rating": round(sum(v) / len(v), 1)}
+        for k, v in sorted(weekly_sat.items())
+    ]
+
+    # --- Goal distribution ---
+    goal_dist: dict[str, int] = {}
+    for c in clients:
+        g = c.goal or "not_set"
+        goal_dist[g] = goal_dist.get(g, 0) + 1
+
+    # --- Leaderboard (sessions/week over last 30d) ---
+    leaderboard = []
+    weeks_count = max(1, len(weekly_activity))
+    for c in clients:
+        c_completed = sum(1 for w in workouts_30 if w.user_id == c.id and w.is_completed)
+        c_total = sum(1 for w in workouts_30 if w.user_id == c.id)
+        sessions_per_week = round(c_completed / (30 / 7), 1)
+        completion = round(c_completed / c_total * 100) if c_total else 0
+        leaderboard.append({
+            "id": c.id,
+            "name": f"{c.firstname} {c.lastname}",
+            "sessions_per_week": sessions_per_week,
+            "completed": c_completed,
+            "total": c_total,
+            "completion": completion,
+        })
+    leaderboard.sort(key=lambda x: x["sessions_per_week"], reverse=True)
+
+    # --- Unread messages ---
+    unread_result = await session.execute(
+        select(func.count(Message.id))
+        .where(Message.receiver_id == coach_id, Message.is_read == False)
+    )
+    unread_messages = unread_result.scalar() or 0
+
+    # --- Pending requests ---
+    pending_result = await session.execute(
+        select(func.count(ClientCoachRequest.id))
+        .where(ClientCoachRequest.coach_id == coach_id, ClientCoachRequest.status == "pending")
+    )
+    pending_requests = pending_result.scalar() or 0
+
+    # --- Recent activity (notification messages from clients) ---
+    notif_result = await session.execute(
+        select(Message)
+        .where(Message.receiver_id == coach_id, Message.content.like('%"_notification"%'))
+        .order_by(desc(Message.timestamp))
+        .limit(20)
+    )
+    notif_msgs = notif_result.scalars().all()
+
+    client_map = {c.id: f"{c.firstname} {c.lastname}" for c in clients}
+    recent_activity = []
+    for msg in notif_msgs:
+        try:
+            data = json.loads(msg.content)
+            if data.get("_notification"):
+                recent_activity.append({
+                    "id": msg.id,
+                    "client_id": msg.sender_id,
+                    "client_name": client_map.get(msg.sender_id, data.get("client_name", "Unknown")),
+                    "type": data.get("type", ""),
+                    "label": data.get("label", ""),
+                    "date": data.get("date"),
+                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                    "is_read": msg.is_read,
                 })
-
-    top_performers.sort(key=lambda x: x["diff_percent"])
-    top_performers = top_performers[:3]
+        except (json.JSONDecodeError, AttributeError):
+            continue
 
     return {
         "kpi": {
             "total_clients": total_clients,
-            "active_today": active_today
+            "week_workouts_completed": week_completed,
+            "week_workouts_total": week_total,
+            "avg_rating": avg_rating,
+            "avg_completion": avg_completion,
         },
-        "alerts": alerts,
-        "top_performers": top_performers
+        "clients_week_workouts": clients_week_workouts,
+        "goal_distribution": goal_dist,
+        "weekly_activity": weekly_activity,
+        "leaderboard": leaderboard,
+        "avg_satisfaction_weekly": avg_satisfaction_weekly,
+        "unread_messages": unread_messages,
+        "pending_requests": pending_requests,
+        "recent_activity": recent_activity,
     }
 
 
@@ -1427,6 +1529,39 @@ async def get_client_statistics(session: AsyncSession, client_id: int, days: int
         d["carbs"] = round(d["carbs"], 1)
         d["fats"] = round(d["fats"], 1)
 
+    # Meal type distribution
+    meal_type_dist: dict[str, int] = {}
+    for m in meals:
+        mt = (m.meal_type or "other").lower()
+        meal_type_dist[mt] = meal_type_dist.get(mt, 0) + 1
+
+    # Weekly nutrition buckets
+    weekly_nutrition: dict[str, dict] = {}
+    for m in meals:
+        m_date = m.hourtime.date() if hasattr(m.hourtime, 'date') else m.hourtime
+        week_start = m_date - timedelta(days=m_date.weekday())
+        key = str(week_start)
+        if key not in weekly_nutrition:
+            weekly_nutrition[key] = {"week_start": key, "calories": 0, "proteins": 0, "carbs": 0, "fats": 0, "meals": 0}
+        weekly_nutrition[key]["calories"] += m.total_calories or 0
+        weekly_nutrition[key]["proteins"] += m.total_proteins or 0
+        weekly_nutrition[key]["carbs"] += m.total_carbohydrates or 0
+        weekly_nutrition[key]["fats"] += m.total_lipids or 0
+        weekly_nutrition[key]["meals"] += 1
+
+    weekly_nutrition_list = []
+    for k in sorted(weekly_nutrition.keys()):
+        e = weekly_nutrition[k]
+        n_meals = e["meals"] or 1
+        weekly_nutrition_list.append({
+            "week_start": e["week_start"],
+            "avg_calories": round(e["calories"] / n_meals * min(n_meals, 3), 1),
+            "avg_proteins": round(e["proteins"] / n_meals, 1),
+            "avg_carbs": round(e["carbs"] / n_meals, 1),
+            "avg_fats": round(e["fats"] / n_meals, 1),
+            "meals": n_meals,
+        })
+
     # Get client's calorie goal for reference
     client_result = await session.execute(select(Users).where(Users.id == client_id))
     client = client_result.scalars().first()
@@ -1452,8 +1587,11 @@ async def get_client_statistics(session: AsyncSession, client_id: int, days: int
             "avg_proteins": avg_prot,
             "avg_carbs": avg_carbs,
             "avg_fats": avg_fats,
+            "total_meals": len(meals),
             "days_logged": days_logged,
+            "meal_type_distribution": meal_type_dist,
             "daily": daily_list,
+            "weekly": weekly_nutrition_list,
         },
     }
 
@@ -1978,12 +2116,33 @@ async def get_conversations(session: AsyncSession, user_id: int):
         )
         last_msg = last_msg_req.scalars().first()
 
+        # Parse notification messages for display
+        display_msg = "No messages yet"
+        if last_msg:
+            try:
+                data = json.loads(last_msg.content)
+                if data.get("_notification"):
+                    labels = {"meal_created": "New Meal", "meal_updated": "Meal Updated", "workout_updated": "Workout Updated", "profile_updated": "Profile Updated"}
+                    display_msg = f"{labels.get(data.get('type', ''), 'Update')}: {data.get('label', '')}"
+                else:
+                    display_msg = last_msg.content
+            except (json.JSONDecodeError, TypeError):
+                display_msg = last_msg.content
+
+        # Count unread messages from this client
+        unread_req = await session.execute(
+            select(func.count(Message.id))
+            .where(Message.sender_id == client.id, Message.receiver_id == user_id, Message.is_read == False)
+        )
+        unread = unread_req.scalar() or 0
+
         conversations.append({
             "client_id": client.id,
             "client_firstname": client.firstname,
             "client_lastname": client.lastname,
-            "last_message": last_msg.content if last_msg else "No messages yet",
-            "last_message_time": last_msg.timestamp if last_msg else None
+            "last_message": display_msg,
+            "last_message_time": last_msg.timestamp if last_msg else None,
+            "unread_count": unread,
         })
 
     conversations.sort(key=lambda x: x["last_message_time"] or datetime.min, reverse=True)
@@ -2088,6 +2247,7 @@ async def notify_coach(session: AsyncSession, client_id: int, notification):
         "type": notification.type,
         "label": notification.label,
         "client_name": f"{client.firstname} {client.lastname}",
+        "date": str(date.today()),
     })
 
     msg = Message(sender_id=client_id, receiver_id=client.coach_id, content=content)
