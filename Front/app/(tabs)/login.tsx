@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 
 import { saveSession } from '@/services/authStorage';
+import { jwtDecode } from 'jwt-decode';
 
 const LoginPage = () => {
   const insets = useSafeAreaInsets();
@@ -16,7 +17,6 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [userType, setUserType] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -32,21 +32,16 @@ const LoginPage = () => {
       setError('Please enter your password');
       return;
     }
-    if (!userType) {
-      setError('Please select if you are a client or coach');
-      return;
-    }
 
     setLoading(true);
     setError('');
 
     try {
-      console.log(`Attempting to login with email: ${email}, userType: ${userType}`);
+      console.log(`Attempting to login with email: ${email}`);
       
       const loginData = {
         email: email,
-        password: password,
-        userType: userType,
+        password: password
       };
       
       const response = await fetch(`${API_URL}/login`, {
@@ -67,11 +62,11 @@ const LoginPage = () => {
         } else {
           const { access_token } = data;
           await saveSession(access_token);
-          if (userType === "client") {
-            navigation.push('/clients/home');
-          } else {
-            navigation.push('/coachs/home');
-          }
+
+          const decoded = jwtDecode(access_token);
+          const role = decoded.role;
+          const route = role === 'coach' ? '/coachs/home' : '/clients/home';
+          navigation.replace(route);
         }
       } else {
         console.log('Authentication failed:', data.detail);
@@ -154,35 +149,6 @@ const LoginPage = () => {
           <TouchableOpacity style={styles.forgotPasswordContainer}>
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
-
-          <Text style={styles.inputLabel}>I am a:</Text>
-          <View style={styles.userTypeContainer}>
-              <TouchableOpacity 
-              style={[
-                  styles.userTypeButton, 
-                  userType === 'client' && styles.selectedUserType
-              ]}
-              onPress={() => setUserType('client')}
-              >
-              <Text style={[
-                  styles.userTypeText,
-                  userType === 'client' && styles.selectedUserTypeText
-              ]}>Client</Text>
-              </TouchableOpacity>
-            
-              <TouchableOpacity 
-              style={[
-                  styles.userTypeButton, 
-                  userType === 'coach' && styles.selectedUserType
-              ]}
-              onPress={() => setUserType('coach')}
-              >
-              <Text style={[
-                  styles.userTypeText,
-                  userType === 'coach' && styles.selectedUserTypeText
-              ]}>Coach</Text>
-              </TouchableOpacity>
-          </View>
         </View>
         
         <TouchableOpacity 

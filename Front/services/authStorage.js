@@ -41,6 +41,15 @@ export const getUserDetails = async () => {
     if (!token) return null;
 
     const decoded = jwtDecode(token);
+
+    // Check if token is expired before making API call
+    const now = Date.now() / 1000;
+    if (decoded.exp && decoded.exp < now) {
+      console.log('Token expired, clearing session');
+      await storageDelete(TOKEN_KEY);
+      return null;
+    }
+
     const userId = decoded.userId;
     const response = await axios.get(`${API_URL}/users/me/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -56,6 +65,8 @@ export const getUserDetails = async () => {
 
   } catch (error) {
     console.log('Error retrieving session:', error);
+    // Clear invalid token to prevent stale sessions
+    await storageDelete(TOKEN_KEY);
     return null;
   }
 };

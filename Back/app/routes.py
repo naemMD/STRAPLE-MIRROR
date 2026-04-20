@@ -124,7 +124,9 @@ async def get_daily_meals(user_id: int, current_user: int = Depends(get_current_
 # -- Chemins dynamiques (/users/{id}/...)  — après tous les fixes
 @router.get("/users/me/{user_id}")
 async def get_current_user(user_id: int, current_user: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)):
-    return await get_user_by_id(session, user_id)
+    if user_id != current_user:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return await get_user_by_id(session, current_user)
 
 
 @router.patch("/users/{user_id}/goals")
