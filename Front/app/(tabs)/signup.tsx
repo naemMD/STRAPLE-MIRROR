@@ -235,17 +235,7 @@ const SignupPage = () => {
         setLoading(false);
     }
   };
-  
-  const testServerConnection = async () => {
-    try {
-      const response = await fetch(`${API_URL}/`);
-      const data = await response.json();
-      Toast.show({ type: 'info', text1: 'Server OK', text2: JSON.stringify(data) });
-    } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Server Error', text2: err.message });
-    }
-  };
-  
+    
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
@@ -253,16 +243,13 @@ const SignupPage = () => {
     >
       <ScrollView contentContainerStyle={[styles.scrollContainer, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.back()}>
+          <TouchableOpacity onPress={() => navigation.back()} style={{ position: 'absolute', left: 0, zIndex: 1 }}>
             <Ionicons name="arrow-back" size={28} color="#3498DB" />
           </TouchableOpacity>
-          <View style={{ alignItems: 'center' }}>
+          <View style={{ alignItems: 'center', flex: 1 }}>
             <StapleLogo fontSize={28} />
             <Text style={{ color: '#888', fontSize: 9, letterSpacing: 2, marginTop: 4 }}>TRAIN SMART, LIVE STRONG</Text>
           </View>
-          <TouchableOpacity style={styles.testButton} onPress={testServerConnection}>
-            <Ionicons name="server-outline" size={24} color="#3498DB" />
-          </TouchableOpacity>
         </View>
         
         <Text style={styles.title}>Create Account</Text>
