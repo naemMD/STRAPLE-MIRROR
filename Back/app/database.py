@@ -9,8 +9,6 @@ URL = os.getenv('DATABASE_URL')
 
 DATABASE_URL = f"{URL}"
 
-print("DATAAAAAABASE ", DATABASE_URL)
-
 engine = create_async_engine(DATABASE_URL, echo=True)
 
 SessionLocal = sessionmaker(

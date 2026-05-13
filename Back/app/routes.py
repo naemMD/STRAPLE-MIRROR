@@ -41,7 +41,6 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)):
 async def read_root():
     return {"hello world"}
 
-
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
