@@ -49,10 +49,11 @@ const CoachScreen = () => {
 
          if (userData.coach_id) {
              try {
-                 const coachRes = await api.get(`/users/me/${userData.coach_id}`);
+                 const coachRes = await api.get(`/coaches/${userData.coach_id}/public-profile`);
                  setMyCoach(coachRes.data);
              } catch (e) {
                  console.error("Could not fetch coach details", e);
+                 setMyCoach({ id: userData.coach_id, firstname: 'Coach', lastname: '', city: '' });
              }
          } else {
              setMyCoach(null);
