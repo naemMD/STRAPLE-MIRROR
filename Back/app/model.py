@@ -2356,6 +2356,45 @@ async def get_public_forums(session: AsyncSession, user_id: int, page: int = 1, 
     })
 
 
+def _current_week_start_utc() -> datetime:
+    now = datetime.utcnow()
+    start = now - timedelta(days=now.weekday())
+    return start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _serialize_meal_summary(meal: "Meal") -> dict:
+    aliments = meal.aliments
+    if isinstance(aliments, list):
+        count = len(aliments)
+    elif isinstance(aliments, dict):
+        count = len(aliments)
+    else:
+        count = 0
+    return {
+        "id": meal.id,
+        "name": meal.name,
+        "total_calories": meal.total_calories or 0,
+        "total_proteins": meal.total_proteins or 0,
+        "total_carbohydrates": meal.total_carbohydrates or 0,
+        "total_lipids": meal.total_lipids or 0,
+        "meal_type": meal.meal_type,
+        "hourtime": meal.hourtime.isoformat() if meal.hourtime else None,
+        "aliments_count": count,
+    }
+
+
+def _serialize_workout_summary(workout: "Workout", exercises_count: int) -> dict:
+    return {
+        "id": workout.id,
+        "name": workout.name,
+        "description": workout.description,
+        "difficulty": workout.difficulty,
+        "scheduled_date": workout.scheduled_date.isoformat() if workout.scheduled_date else None,
+        "exercises_count": exercises_count,
+        "is_completed": bool(workout.is_completed),
+    }
+
+
 async def get_forum_with_messages(session: AsyncSession, forum_id: int, user_id: int):
     res = await session.execute(
         select(Forum, Users)
@@ -2378,8 +2417,41 @@ async def get_forum_with_messages(session: AsyncSession, forum_id: int, user_id:
         .where(ForumMessage.forum_id == forum_id)
         .order_by(asc(ForumMessage.created_at))
     )
+    raw_messages = msg_res.all()
+
+    meal_ids = {m.shared_meal_id for m, _ in raw_messages if m.shared_meal_id}
+    workout_ids = {m.shared_workout_id for m, _ in raw_messages if m.shared_workout_id}
+
+    meals_by_id = {}
+    if meal_ids:
+        meal_res = await session.execute(select(Meal).where(Meal.id.in_(meal_ids)))
+        for meal in meal_res.scalars().all():
+            meals_by_id[meal.id] = meal
+
+    workouts_by_id = {}
+    workout_ex_counts = {}
+    if workout_ids:
+        wk_res = await session.execute(select(Workout).where(Workout.id.in_(workout_ids)))
+        for wk in wk_res.scalars().all():
+            workouts_by_id[wk.id] = wk
+        count_res = await session.execute(
+            select(WorkoutExercise.workout_id, func.count(WorkoutExercise.id))
+            .where(WorkoutExercise.workout_id.in_(workout_ids))
+            .group_by(WorkoutExercise.workout_id)
+        )
+        for wk_id, cnt in count_res.all():
+            workout_ex_counts[wk_id] = cnt
+
     messages = []
-    for msg, msg_author in msg_res.all():
+    for msg, msg_author in raw_messages:
+        shared_meal = None
+        if msg.shared_meal_id and msg.shared_meal_id in meals_by_id:
+            shared_meal = _serialize_meal_summary(meals_by_id[msg.shared_meal_id])
+        shared_workout = None
+        if msg.shared_workout_id and msg.shared_workout_id in workouts_by_id:
+            wk = workouts_by_id[msg.shared_workout_id]
+            shared_workout = _serialize_workout_summary(wk, workout_ex_counts.get(wk.id, 0))
+
         messages.append({
             "id": msg.id,
             "forum_id": msg.forum_id,
@@ -2389,6 +2461,8 @@ async def get_forum_with_messages(session: AsyncSession, forum_id: int, user_id:
             "author_role": msg_author.role,
             "content": msg.content,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
+            "shared_meal": shared_meal,
+            "shared_workout": shared_workout,
         })
 
     return JSONResponse(status_code=200, content={
@@ -2416,13 +2490,70 @@ async def post_forum_message(session: AsyncSession, forum_id: int, user_id: int,
     if forum.status != 'public' and forum.user_id != user_id:
         raise HTTPException(status_code=403, detail="This forum is not public")
 
-    msg = ForumMessage(forum_id=forum_id, user_id=user_id, content=message_data.content)
+    meal_id = message_data.shared_meal_id
+    workout_id = message_data.shared_workout_id
+
+    if meal_id and workout_id:
+        raise HTTPException(status_code=400, detail="A message can attach either a meal or a workout, not both")
+
+    has_attachment = bool(meal_id or workout_id)
+    if not has_attachment and not (message_data.content or "").strip():
+        raise HTTPException(status_code=400, detail="Message content is required when no attachment is provided")
+
+    author = await session.get(Users, user_id)
+    if not author:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    week_start = _current_week_start_utc()
+
+    if meal_id:
+        if author.role != 'client':
+            raise HTTPException(status_code=403, detail="Only sportifs can share meals")
+        meal_res = await session.execute(select(Meal).where(Meal.id == meal_id))
+        meal = meal_res.scalars().first()
+        if not meal or meal.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Meal not found")
+        if not meal.hourtime or meal.hourtime.replace(tzinfo=None) < week_start:
+            raise HTTPException(status_code=400, detail="Only meals from the current week can be shared")
+
+    if workout_id:
+        if author.role != 'client':
+            raise HTTPException(status_code=403, detail="Only sportifs can share workouts")
+        wk_res = await session.execute(select(Workout).where(Workout.id == workout_id))
+        workout = wk_res.scalars().first()
+        if not workout or workout.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Workout not found")
+        if not workout.scheduled_date or workout.scheduled_date.replace(tzinfo=None) < week_start:
+            raise HTTPException(status_code=400, detail="Only workouts from the current week can be shared")
+
+    msg = ForumMessage(
+        forum_id=forum_id,
+        user_id=user_id,
+        content=message_data.content or "",
+        shared_meal_id=meal_id,
+        shared_workout_id=workout_id,
+    )
     session.add(msg)
     forum.last_activity_at = datetime.utcnow()
     await session.commit()
     await session.refresh(msg)
 
-    author = await session.get(Users, user_id)
+    shared_meal = None
+    shared_workout = None
+    if meal_id:
+        meal_res = await session.execute(select(Meal).where(Meal.id == meal_id))
+        meal = meal_res.scalars().first()
+        if meal:
+            shared_meal = _serialize_meal_summary(meal)
+    if workout_id:
+        wk_res = await session.execute(select(Workout).where(Workout.id == workout_id))
+        wk = wk_res.scalars().first()
+        if wk:
+            ex_count_res = await session.execute(
+                select(func.count(WorkoutExercise.id)).where(WorkoutExercise.workout_id == wk.id)
+            )
+            shared_workout = _serialize_workout_summary(wk, ex_count_res.scalar() or 0)
+
     return JSONResponse(status_code=201, content={
         "id": msg.id,
         "forum_id": msg.forum_id,
@@ -2432,7 +2563,39 @@ async def post_forum_message(session: AsyncSession, forum_id: int, user_id: int,
         "author_role": author.role,
         "content": msg.content,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "shared_meal": shared_meal,
+        "shared_workout": shared_workout,
     })
+
+
+async def get_shareable_meals(session: AsyncSession, user_id: int):
+    week_start = _current_week_start_utc()
+    res = await session.execute(
+        select(Meal)
+        .where(Meal.user_id == user_id, Meal.hourtime >= week_start)
+        .order_by(desc(Meal.hourtime))
+    )
+    return [_serialize_meal_summary(m) for m in res.scalars().all()]
+
+
+async def get_shareable_workouts(session: AsyncSession, user_id: int):
+    week_start = _current_week_start_utc()
+    res = await session.execute(
+        select(Workout)
+        .where(Workout.user_id == user_id, Workout.scheduled_date >= week_start)
+        .order_by(desc(Workout.scheduled_date))
+    )
+    workouts = res.scalars().all()
+    if not workouts:
+        return []
+    ids = [w.id for w in workouts]
+    count_res = await session.execute(
+        select(WorkoutExercise.workout_id, func.count(WorkoutExercise.id))
+        .where(WorkoutExercise.workout_id.in_(ids))
+        .group_by(WorkoutExercise.workout_id)
+    )
+    counts = {wid: c for wid, c in count_res.all()}
+    return [_serialize_workout_summary(w, counts.get(w.id, 0)) for w in workouts]
 
 
 async def toggle_forum_favorite(session: AsyncSession, user_id: int, forum_id: int):

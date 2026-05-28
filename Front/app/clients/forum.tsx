@@ -11,6 +11,12 @@ import { crossAlert } from '@/services/crossAlert';
 import { jwtDecode } from 'jwt-decode';
 import api from '@/services/api';
 import { Toast } from 'react-native-toast-message/lib/src/Toast';
+import {
+  SharedMealCard,
+  SharedWorkoutCard,
+  SharedMeal,
+  SharedWorkout,
+} from '@/components/SharedAttachmentCard';
 
 type Tab = 'all' | 'favorites' | 'mine';
 type ViewMode = 'list' | 'detail';
@@ -94,6 +100,15 @@ const ForumScreen = () => {
 
   const [newMessage, setNewMessage] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+
+  // Attachment picker state
+  const [attachPickerVisible, setAttachPickerVisible] = useState(false);
+  const [attachTab, setAttachTab] = useState<'meals' | 'workouts'>('meals');
+  const [shareableMeals, setShareableMeals] = useState<SharedMeal[]>([]);
+  const [shareableWorkouts, setShareableWorkouts] = useState<SharedWorkout[]>([]);
+  const [loadingShareable, setLoadingShareable] = useState(false);
+  const [stagedMeal, setStagedMeal] = useState<SharedMeal | null>(null);
+  const [stagedWorkout, setStagedWorkout] = useState<SharedWorkout | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -238,24 +253,65 @@ const ForumScreen = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !currentForum) return;
+    if (!currentForum) return;
+    const hasAttachment = !!(stagedMeal || stagedWorkout);
+    if (!newMessage.trim() && !hasAttachment) return;
     setSendingMsg(true);
     try {
       const res = await api.post(
         `/forums/${currentForum.id}/messages`,
-        { content: newMessage.trim() }
+        {
+          content: newMessage.trim(),
+          shared_meal_id: stagedMeal?.id ?? null,
+          shared_workout_id: stagedWorkout?.id ?? null,
+        }
       );
       setCurrentForum((prev: any) => ({
         ...prev,
         messages: [...(prev.messages || []), res.data],
       }));
       setNewMessage('');
+      setStagedMeal(null);
+      setStagedWorkout(null);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-    } catch {
-      Toast.show({ type: 'error', text1: 'Failed to send message' });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      Toast.show({ type: 'error', text1: detail || 'Failed to send message' });
     } finally {
       setSendingMsg(false);
     }
+  };
+
+  const openAttachPicker = async () => {
+    setStagedMeal(null);
+    setStagedWorkout(null);
+    setAttachTab('meals');
+    setAttachPickerVisible(true);
+    setLoadingShareable(true);
+    try {
+      const [mealsRes, workoutsRes] = await Promise.all([
+        api.get('/clients/me/shareable-meals'),
+        api.get('/clients/me/shareable-workouts'),
+      ]);
+      setShareableMeals(mealsRes.data || []);
+      setShareableWorkouts(workoutsRes.data || []);
+    } catch {
+      Toast.show({ type: 'error', text1: 'Failed to load your week' });
+    } finally {
+      setLoadingShareable(false);
+    }
+  };
+
+  const selectMeal = (meal: SharedMeal) => {
+    setStagedMeal(meal);
+    setStagedWorkout(null);
+    setAttachPickerVisible(false);
+  };
+
+  const selectWorkout = (workout: SharedWorkout) => {
+    setStagedWorkout(workout);
+    setStagedMeal(null);
+    setAttachPickerVisible(false);
   };
 
   const confirmDeleteMessage = (messageId: number) => {
@@ -346,7 +402,9 @@ const ForumScreen = () => {
                       />
                     </TouchableOpacity>
                   )}
-                  <Text style={styles.msgContent}>{msg.content}</Text>
+                  {msg.content ? <Text style={styles.msgContent}>{msg.content}</Text> : null}
+                  {msg.shared_meal && <SharedMealCard meal={msg.shared_meal} />}
+                  {msg.shared_workout && <SharedWorkoutCard workout={msg.shared_workout} />}
                   <View style={styles.msgBubbleFooter}>
                     <Text style={styles.msgTime}>{formatTime(msg.created_at)}</Text>
                     {isForumCreator && (
@@ -361,25 +419,118 @@ const ForumScreen = () => {
           })}
         </ScrollView>
 
+        {(stagedMeal || stagedWorkout) && (
+          <View style={styles.stagedAttachmentBar}>
+            <View style={{ flex: 1 }}>
+              {stagedMeal && <SharedMealCard meal={stagedMeal} compact />}
+              {stagedWorkout && <SharedWorkoutCard workout={stagedWorkout} compact />}
+            </View>
+            <TouchableOpacity
+              onPress={() => { setStagedMeal(null); setStagedWorkout(null); }}
+              style={styles.stagedRemoveBtn}
+            >
+              <Ionicons name="close-circle" size={22} color="#E74C3C" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
+          <TouchableOpacity
+            style={styles.attachBtn}
+            onPress={openAttachPicker}
+            disabled={sendingMsg}
+          >
+            <Ionicons name="attach" size={22} color="#3498DB" />
+          </TouchableOpacity>
           <TextInput
             style={styles.messageInput}
-            placeholder="Write a message..."
+            placeholder={stagedMeal || stagedWorkout ? 'Add a caption (optional)...' : 'Write a message...'}
             placeholderTextColor="#8A8D91"
             value={newMessage}
             onChangeText={setNewMessage}
             multiline
           />
           <TouchableOpacity
-            style={[styles.sendBtn, (!newMessage.trim() || sendingMsg) && { opacity: 0.5 }]}
+            style={[
+              styles.sendBtn,
+              (!newMessage.trim() && !stagedMeal && !stagedWorkout) || sendingMsg
+                ? { opacity: 0.5 }
+                : null,
+            ]}
             onPress={handleSendMessage}
-            disabled={!newMessage.trim() || sendingMsg}
+            disabled={(!newMessage.trim() && !stagedMeal && !stagedWorkout) || sendingMsg}
           >
             {sendingMsg
               ? <ActivityIndicator size="small" color="white" />
               : <Ionicons name="send" size={20} color="white" />}
           </TouchableOpacity>
         </View>
+
+        {/* Attachment picker modal */}
+        <Modal visible={attachPickerVisible} animationType="slide" transparent>
+          <Pressable style={styles.modalOverlay} onPress={() => setAttachPickerVisible(false)}>
+            <Pressable style={[styles.modalCard, { maxHeight: '85%' }]} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>Share from this week</Text>
+
+              <View style={styles.attachTabBar}>
+                <TouchableOpacity
+                  style={[styles.attachTab, attachTab === 'meals' && styles.attachTabActive]}
+                  onPress={() => setAttachTab('meals')}
+                >
+                  <Ionicons name="restaurant-outline" size={16} color={attachTab === 'meals' ? 'white' : '#8A8D91'} />
+                  <Text style={[styles.attachTabText, attachTab === 'meals' && styles.attachTabTextActive]}>
+                    Meals ({shareableMeals.length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.attachTab, attachTab === 'workouts' && styles.attachTabActive]}
+                  onPress={() => setAttachTab('workouts')}
+                >
+                  <Ionicons name="barbell-outline" size={16} color={attachTab === 'workouts' ? 'white' : '#8A8D91'} />
+                  <Text style={[styles.attachTabText, attachTab === 'workouts' && styles.attachTabTextActive]}>
+                    Workouts ({shareableWorkouts.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingShareable ? (
+                <ActivityIndicator color="#3498DB" style={{ marginTop: 30 }} />
+              ) : (
+                <ScrollView style={{ marginTop: 12 }} keyboardShouldPersistTaps="handled">
+                  {attachTab === 'meals' && (
+                    shareableMeals.length === 0 ? (
+                      <Text style={styles.emptyAttach}>No meals created this week yet.</Text>
+                    ) : (
+                      shareableMeals.map(meal => (
+                        <TouchableOpacity key={meal.id} onPress={() => selectMeal(meal)} activeOpacity={0.7}>
+                          <SharedMealCard meal={meal} />
+                        </TouchableOpacity>
+                      ))
+                    )
+                  )}
+                  {attachTab === 'workouts' && (
+                    shareableWorkouts.length === 0 ? (
+                      <Text style={styles.emptyAttach}>No workouts created this week yet.</Text>
+                    ) : (
+                      shareableWorkouts.map(workout => (
+                        <TouchableOpacity key={workout.id} onPress={() => selectWorkout(workout)} activeOpacity={0.7}>
+                          <SharedWorkoutCard workout={workout} />
+                        </TouchableOpacity>
+                      ))
+                    )
+                  )}
+                </ScrollView>
+              )}
+
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { marginTop: 16 }]}
+                onPress={() => setAttachPickerVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </KeyboardAvoidingView>
     );
   }
@@ -854,6 +1005,41 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center',
   },
+  attachBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#2A4562', justifyContent: 'center', alignItems: 'center',
+  },
+  stagedAttachmentBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    backgroundColor: '#161B22',
+    borderTopWidth: 1,
+    borderTopColor: '#222',
+    gap: 8,
+  },
+  stagedRemoveBtn: { padding: 4 },
+  attachTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#2A4562',
+    borderRadius: 10,
+    padding: 4,
+    marginTop: 8,
+  },
+  attachTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  attachTabActive: { backgroundColor: '#3498DB' },
+  attachTabText: { color: '#8A8D91', fontSize: 13, fontWeight: '600' },
+  attachTabTextActive: { color: 'white' },
+  emptyAttach: { color: '#8A8D91', textAlign: 'center', marginTop: 30, fontSize: 14 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalCard: {

@@ -11,6 +11,7 @@ import { crossAlert } from '@/services/crossAlert';
 import { jwtDecode } from 'jwt-decode';
 import api from '@/services/api';
 import { Toast } from 'react-native-toast-message/lib/src/Toast';
+import { SharedMealCard, SharedWorkoutCard } from '@/components/SharedAttachmentCard';
 
 type Tab = 'all' | 'favorites' | 'mine';
 type ViewMode = 'list' | 'detail';
@@ -346,7 +347,9 @@ const ForumScreen = () => {
                       />
                     </TouchableOpacity>
                   )}
-                  <Text style={styles.msgContent}>{msg.content}</Text>
+                  {msg.content ? <Text style={styles.msgContent}>{msg.content}</Text> : null}
+                  {msg.shared_meal && <SharedMealCard meal={msg.shared_meal} />}
+                  {msg.shared_workout && <SharedWorkoutCard workout={msg.shared_workout} />}
                   <View style={styles.msgBubbleFooter}>
                     <Text style={styles.msgTime}>{formatTime(msg.created_at)}</Text>
                     {isForumCreator && (

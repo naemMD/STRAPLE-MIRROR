@@ -773,6 +773,22 @@ async def get_my_invitations_route(
     return await get_client_invitations(session, user_id)
 
 
+@router.get("/clients/me/shareable-meals")
+async def get_shareable_meals_route(
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session)
+):
+    return await get_shareable_meals(session, user_id)
+
+
+@router.get("/clients/me/shareable-workouts")
+async def get_shareable_workouts_route(
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session)
+):
+    return await get_shareable_workouts(session, user_id)
+
+
 @router.get("/clients/me/sent-requests")
 async def get_client_sent_requests_route(
     current_user_id: int = Depends(get_current_user_id),

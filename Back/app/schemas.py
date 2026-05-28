@@ -442,6 +442,8 @@ class ForumMessage(Base):
     forum_id = Column(Integer, ForeignKey("forums.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
+    shared_meal_id = Column(Integer, ForeignKey("meals.id", ondelete="SET NULL"), nullable=True)
+    shared_workout_id = Column(Integer, ForeignKey("workouts.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     forum = relationship("Forum", back_populates="messages")
@@ -493,7 +495,9 @@ class ForumRead(BaseModel):
 
 
 class ForumMessageCreate(BaseModel):
-    content: str
+    content: str = ""
+    shared_meal_id: Optional[int] = None
+    shared_workout_id: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -580,6 +584,28 @@ class UserInjuryRead(BaseModel):
         from_attributes = True
 
 
+class SharedMealSummary(BaseModel):
+    id: int
+    name: str
+    total_calories: float
+    total_proteins: float
+    total_carbohydrates: float
+    total_lipids: float
+    meal_type: Optional[str] = None
+    hourtime: datetime
+    aliments_count: int = 0
+
+
+class SharedWorkoutSummary(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    difficulty: str
+    scheduled_date: datetime
+    exercises_count: int = 0
+    is_completed: bool = False
+
+
 class ForumMessageRead(BaseModel):
     id: int
     forum_id: int
@@ -589,6 +615,8 @@ class ForumMessageRead(BaseModel):
     author_role: str
     content: str
     created_at: datetime
+    shared_meal: Optional[SharedMealSummary] = None
+    shared_workout: Optional[SharedWorkoutSummary] = None
 
     class Config:
         from_attributes = True
