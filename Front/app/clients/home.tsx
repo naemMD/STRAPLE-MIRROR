@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   StyleSheet, Text, View, TouchableOpacity,
   ScrollView, Image, TextInput, Modal, Keyboard,
-  ActivityIndicator, StatusBar, Platform, Dimensions, KeyboardAvoidingView
+  ActivityIndicator, StatusBar, Platform, Dimensions, KeyboardAvoidingView, Pressable
 } from 'react-native';
 import { crossAlert } from '@/services/crossAlert';
 import { Ionicons } from '@expo/vector-icons';
@@ -925,8 +925,9 @@ const HomeScreen = () => {
       </Modal>
 
       <Modal visible={isDetailModalVisible} animationType="slide" transparent>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
-            <View style={[styles.mealModalContent, {height: 'auto'}]}>
+        <Pressable style={styles.modalOverlay} onPress={Keyboard.dismiss}>
+            {/* Inner Pressable stops taps from bubbling to the overlay (which dismisses the keyboard) */}
+            <Pressable style={[styles.mealModalContent, {height: 'auto'}]} onPress={(e) => e.stopPropagation()}>
                 {selectedFood && (
                     <>
                         <Text style={styles.modalTitle}>{selectedFood.name}</Text>
@@ -953,8 +954,8 @@ const HomeScreen = () => {
                         </View>
                     </>
                 )}
-            </View>
-        </TouchableOpacity>
+            </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal visible={isViewModalVisible} animationType="fade" transparent onRequestClose={() => setIsViewModalVisible(false)}>
@@ -987,9 +988,9 @@ const HomeScreen = () => {
         </View>
        </Modal>
 
-       <Modal visible={isGoalModalVisible} animationType="fade" transparent>
-        <TouchableOpacity style={styles.modalBackground} activeOpacity={1} onPress={() => setIsGoalModalVisible(false)}>
-            <View style={[styles.modalContainer, {width: '80%'}]}>
+       <Modal visible={isGoalModalVisible} animationType="fade" transparent onRequestClose={() => setIsGoalModalVisible(false)}>
+        <Pressable style={styles.modalBackground} onPress={() => setIsGoalModalVisible(false)}>
+            <Pressable style={[styles.modalContainer, {width: '80%'}]} onPress={(e) => e.stopPropagation()}>
                 <Text style={styles.modalTitle}>Daily Goal</Text>
                 <TextInput style={styles.textInput} keyboardType="numeric" value={newGoal} onChangeText={setNewGoal} placeholder="e.g. 2500" placeholderTextColor="#777" autoFocus/>
                 <View style={{flexDirection:'row', justifyContent:'flex-end', marginTop: 20}}>
@@ -997,8 +998,8 @@ const HomeScreen = () => {
                         {updatingGoal ? <ActivityIndicator size="small" color="white"/> : <Text style={{color:'white'}}>Save</Text>}
                     </TouchableOpacity>
                 </View>
-            </View>
-        </TouchableOpacity>
+            </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
