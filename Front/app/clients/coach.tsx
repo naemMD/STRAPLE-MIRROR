@@ -49,7 +49,8 @@ const CoachScreen = () => {
 
          if (userData.coach_id) {
              try {
-                 const coachRes = await api.get(`/users/me/${userData.coach_id}`);
+                 // /users/me/{id} renvoie 403 pour un autre utilisateur — on passe par le profil public du coach
+                 const coachRes = await api.get(`/coaches/${userData.coach_id}/public-profile`);
                  setMyCoach(coachRes.data);
              } catch (e) {
                  console.error("Could not fetch coach details", e);
