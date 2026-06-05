@@ -528,7 +528,7 @@ async def get_exercises_from_api(muscle: str, current_user: int = Depends(get_cu
 
 
 @router.get("/scan/{code}/{format}")
-async def scan_aliment(code: str, current_user: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)):
+async def scan_aliment(code: str, format: str, current_user: int = Depends(get_current_user_id), session: AsyncSession = Depends(get_session)):
     return scan_food(code, format)
 
 

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator,
-  Modal, ScrollView, Animated, PanResponder, Dimensions, TextInput, Pressable
+  Modal, ScrollView, Animated, PanResponder, Dimensions, TextInput, Pressable, Platform
 } from 'react-native';
 import { crossAlert } from '@/services/crossAlert';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -116,6 +116,11 @@ const TrainingDashboard = () => {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      // Never give the gesture away to a parent scroller (browser page scroll on web)
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onPanResponderGrant: () => {
         panOffset.current = (panY as any)._value;
         panY.setOffset(0);
@@ -1325,7 +1330,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#141824', borderTopLeftRadius: 30, borderTopRightRadius: 30,
     shadowColor: "#000", shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.5, shadowRadius: 5, elevation: 20,
   },
-  dragHandleArea: { width: '100%', height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
+  dragHandleArea: {
+    width: '100%', height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent',
+    // On web, stop the browser from hijacking the drag as a page scroll
+    ...(Platform.OS === 'web' ? ({ touchAction: 'none', userSelect: 'none', cursor: 'grab' } as any) : {}),
+  },
   dragHandleBar: { width: 50, height: 5, backgroundColor: '#4A5568', borderRadius: 3 },
   sheetContent: { flex: 1, paddingHorizontal: 20 },
   sectionTitle: { color: '#888', fontSize: 14, textTransform: 'uppercase', letterSpacing: 1, flex: 1 },

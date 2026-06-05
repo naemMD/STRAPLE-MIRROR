@@ -146,16 +146,26 @@ def get_exercises(muscle):
 def scan_food(code, format):
     SCAN_API = os.getenv("SCAN_API")
     FULL_URL = f"{SCAN_API}/api/v0/product/{code}.{format}"
-    response = requests.get(FULL_URL)
+    # OpenFoodFacts rejects the default python-requests User-Agent with a 403
+    headers = {"User-Agent": "NutriTrain/1.0 (nutritrain-app)"}
+    try:
+        response = requests.get(FULL_URL, headers=headers, timeout=10)
+    except requests.RequestException as e:
+        print(f"Erreur réseau scan: {e}")
+        raise HTTPException(status_code=503, detail="Food database unreachable, please retry")
 
     if response.status_code == 200:
         try:
             data = response.json()
             product = data.get("product")
+            # OpenFoodFacts returns HTTP 200 with status=0 and no "product" key when the barcode is unknown
+            if not product:
+                raise HTTPException(status_code=404, detail="Aliment not found")
             nutriments = product.get("nutriments", {})
 
             return {
                 "name": product.get("product_name", "Unknown"),
+                "image": product.get("image_front_url") or product.get("image_url"),
                 "energy": nutriments.get("energy-kcal_100g") or 0,
                 "proteins": nutriments.get("proteins_100g") or 0,
                 "carbohydrates": nutriments.get("carbohydrates_100g") or 0,

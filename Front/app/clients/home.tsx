@@ -68,6 +68,7 @@ const HomeScreen = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState('');
   const isProcessingScan = useRef(false);
 
   // --- STATE VIEW / DETAIL ---
@@ -421,21 +422,32 @@ const HomeScreen = () => {
 
   // --- LOGIQUE CAMERA ---
   const openCameraModal = async () => {
-    if (!permission?.granted) {
+    // On web the camera is not used (manual barcode entry), so skip the permission check
+    if (Platform.OS !== 'web' && !permission?.granted) {
       const { granted } = await requestPermission();
       if (!granted) {
         crossAlert("Permission required", "Camera access is needed.");
         return;
       }
     }
-    
+
     isProcessingScan.current = false;
     setScanned(false);
-    
+    setManualBarcode('');
+
     setIsModalVisible(false);
     setTimeout(() => {
         setIsCameraOpen(true);
     }, 300);
+  };
+
+  const submitManualBarcode = () => {
+    const code = manualBarcode.trim();
+    if (!code) {
+      crossAlert("Barcode missing", "Please enter a barcode number.");
+      return;
+    }
+    handleBarCodeScanned({ type: 'manual', data: code });
   };
 
   const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
@@ -856,10 +868,20 @@ const HomeScreen = () => {
                   placeholder="Enter barcode number..."
                   placeholderTextColor="#888"
                   keyboardType="numeric"
-                  onSubmitEditing={(e) => handleBarCodeScanned({ type: 'manual', data: e.nativeEvent.text })}
+                  value={manualBarcode}
+                  onChangeText={setManualBarcode}
+                  onSubmitEditing={submitManualBarcode}
+                  editable={!scanned}
                 />
                 <TouchableOpacity
-                  style={{ marginTop: 20, backgroundColor: '#e74c3c', padding: 15, borderRadius: 10 }}
+                  style={{ marginTop: 20, backgroundColor: '#2ecc71', padding: 15, borderRadius: 10, width: '100%', alignItems: 'center', opacity: scanned ? 0.6 : 1 }}
+                  onPress={submitManualBarcode}
+                  disabled={scanned}
+                >
+                  {scanned ? <ActivityIndicator color="white" size="small" /> : <Text style={{ color: 'white', fontWeight: 'bold' }}>Validate</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ marginTop: 12, backgroundColor: '#e74c3c', padding: 15, borderRadius: 10, width: '100%', alignItems: 'center' }}
                   onPress={() => { setIsCameraOpen(false); setIsModalVisible(true); }}
                 >
                   <Text style={{ color: 'white', fontWeight: 'bold' }}>Close</Text>
