@@ -811,4 +811,8 @@ __all__ = [
     "NewsletterSubscriber",
     "NewsletterSubscribeRequest",
     "NewsletterSendRequest",
+    "FEEDBACK_MOST_USED_OPTIONS",
+    "AppFeedback",
+    "AppFeedbackCreate",
+    "AppFeedbackRead",
 ]
