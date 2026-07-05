@@ -6,11 +6,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect, useCallback } from "react";
 import api from "../../services/api";
 import { getToken } from "../../services/authStorage";
+import FeedbackModal from "@/components/FeedbackModal";
+import { useFeedbackPrompt } from "@/hooks/useFeedbackPrompt";
 
 export default function ClientLayout() {
   const segments = useSegments();
   const [unreadCount, setUnreadCount] = useState(0);
   const [authChecked, setAuthChecked] = useState(false);
+  const feedback = useFeedbackPrompt();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -131,6 +134,13 @@ export default function ClientLayout() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* In-app satisfaction survey (auto-opens after a few usage days) */}
+        <FeedbackModal
+          visible={feedback.visible}
+          onSubmitted={feedback.markDone}
+          onSnooze={feedback.snooze}
+        />
 
       </View>
     </SafeAreaView>

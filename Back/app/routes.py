@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.model import *
 from app.database import get_session
 from app.api import *
-from app.schemas import WorkoutCreate, WorkoutRead, WorkoutExerciseCreate, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage, AI_DAILY_MESSAGE_LIMIT, AI_WEEKLY_WORKOUT_LIMIT, AI_DAILY_WORKOUT_LIMIT, UserInjury, UserInjuryRead, InjuryProposal, InjuryConfirmRequest, GenerateProgramRequest, SaveGeneratedProgramRequest, Users, Workout, WorkoutExercise, NewsletterSubscribeRequest, NewsletterSendRequest, WorkoutRatingCreate
+from app.schemas import WorkoutCreate, WorkoutRead, WorkoutExerciseCreate, MealRead, MealCreateByCoach, UserGoalUpdate, MacroUpdate, ForumCreate, ForumUpdate, ForumMessageCreate, AIChatRequest, AIChatResponse, AIChatMessageRead, AIChatMessage, AI_DAILY_MESSAGE_LIMIT, AI_WEEKLY_WORKOUT_LIMIT, AI_DAILY_WORKOUT_LIMIT, UserInjury, UserInjuryRead, InjuryProposal, InjuryConfirmRequest, GenerateProgramRequest, SaveGeneratedProgramRequest, Users, Workout, WorkoutExercise, NewsletterSubscribeRequest, NewsletterSendRequest, WorkoutRatingCreate, AppFeedbackCreate
 from typing import List, Any, Optional
 from jose import JWTError, jwt
 from dotenv import load_dotenv
@@ -1425,3 +1425,16 @@ async def newsletter_import_route(
         else:
             skipped += 1
     return {"detail": f"Imported {added} new subscriber(s), {skipped} already existed"}
+
+
+# ---------------------------------------------------------------------------
+# App feedback (in-app satisfaction survey)
+# ---------------------------------------------------------------------------
+
+@router.post("/feedback", status_code=201)
+async def submit_app_feedback(
+    feedback_data: AppFeedbackCreate,
+    current_user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    return await create_app_feedback(session, current_user_id, feedback_data)

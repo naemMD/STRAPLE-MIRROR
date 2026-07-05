@@ -3102,3 +3102,30 @@ async def send_newsletter(session: AsyncSession, subject: str, html_content: str
         "sent": sent,
         "errors": errors if errors else None,
     })
+
+
+# ---------------------------------------------------------------------------
+# App feedback (in-app satisfaction survey)
+# ---------------------------------------------------------------------------
+
+async def create_app_feedback(session: AsyncSession, user_id: int, feedback_data: AppFeedbackCreate):
+    if feedback_data.most_used is not None and feedback_data.most_used not in FEEDBACK_MOST_USED_OPTIONS:
+        raise HTTPException(status_code=422, detail="Invalid 'most_used' value.")
+
+    feedback = AppFeedback(
+        user_id=user_id,
+        rating=feedback_data.rating,
+        is_intuitive=feedback_data.is_intuitive,
+        is_useful=feedback_data.is_useful,
+        most_used=feedback_data.most_used,
+        comment=(feedback_data.comment or "").strip() or None,
+    )
+    session.add(feedback)
+    await session.commit()
+    await session.refresh(feedback)
+
+    return JSONResponse(status_code=201, content={
+        "status": "OK",
+        "detail": "Feedback recorded. Thank you!",
+        "id": feedback.id,
+    })

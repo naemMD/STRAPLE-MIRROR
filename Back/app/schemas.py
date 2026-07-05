@@ -409,6 +409,51 @@ class MacroUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# App feedback (in-app satisfaction survey shown after N usage days)
+# ---------------------------------------------------------------------------
+
+# Allowed answers for the "what do you use the most" question.
+FEEDBACK_MOST_USED_OPTIONS = [
+    "trainings", "nutrition", "coach_chat", "community", "ai_coach", "other",
+]
+
+
+class AppFeedback(Base):
+    __tablename__ = "app_feedbacks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    rating = Column(Integer, nullable=False)              # 1-5 stars
+    is_intuitive = Column(Boolean, nullable=True)         # "is the app intuitive for you?"
+    is_useful = Column(Boolean, nullable=True)            # "is the app useful to you?"
+    most_used = Column(String(30), nullable=True)         # one of FEEDBACK_MOST_USED_OPTIONS
+    comment = Column(Text, nullable=True)                 # free-text extra feedback
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AppFeedbackCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    is_intuitive: Optional[bool] = None
+    is_useful: Optional[bool] = None
+    most_used: Optional[str] = None
+    comment: Optional[str] = None
+
+
+class AppFeedbackRead(BaseModel):
+    id: int
+    user_id: int
+    rating: int
+    is_intuitive: Optional[bool]
+    is_useful: Optional[bool]
+    most_used: Optional[str]
+    comment: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------------------------------------------------------------------
 # Forums
 # ---------------------------------------------------------------------------
 
