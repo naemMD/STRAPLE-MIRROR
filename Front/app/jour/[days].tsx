@@ -5,6 +5,9 @@ import {
   TextInput, TouchableOpacity, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { crossAlert } from '@/services/crossAlert';
+import Constants from 'expo-constants';
+
+const API_URL = Constants.expoConfig?.extra?.API_URL ?? '';
 
 export default function ProgrammeJour() {
   const { days } = useLocalSearchParams();
@@ -21,7 +24,7 @@ export default function ProgrammeJour() {
   const fetchExercicesByDay = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:8000/exercices/${days}`);
+      const response = await fetch(`${API_URL}/exercices/${days}`);
       const data = await response.json();
 
       if (data.status === 'OK') {
@@ -52,7 +55,7 @@ export default function ProgrammeJour() {
     try {
       setSearching(true);
       setSearchError(null);
-      const response = await fetch(`http://localhost:8000/exercice/search?nom=${encodeURIComponent(searchTerm)}`);
+      const response = await fetch(`${API_URL}/exercice/search?nom=${encodeURIComponent(searchTerm)}`);
       const data = await response.json();
 
       if (data.status === 'OK') {
@@ -75,7 +78,7 @@ export default function ProgrammeJour() {
 
     try {
       setAddingExercice(true);
-      const response = await fetch(`http://localhost:8000/exercice/update-day?exercice_id=${searchResult._id}&day=${days}`, {
+      const response = await fetch(`${API_URL}/exercice/update-day?exercice_id=${searchResult._id}&day=${days}`, {
         method: 'PUT'
       });
 
