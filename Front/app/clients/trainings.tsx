@@ -768,7 +768,7 @@ const TrainingDashboard = () => {
                   <Ionicons name="sparkles" size={16} color="white" />
                   <Text style={styles.sheetBtnText}>AI Program</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.sheetBtnAdd} onPress={() => router.push('/clients/create-session')}>
+                <TouchableOpacity style={styles.sheetBtnAdd} onPress={() => router.push({ pathname: '/clients/create-session', params: { date: selectedDate } })}>
                   <Ionicons name="add" size={16} color="white" />
                   <Text style={styles.sheetBtnText}>New Training</Text>
                 </TouchableOpacity>

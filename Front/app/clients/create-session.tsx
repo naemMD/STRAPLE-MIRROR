@@ -6,7 +6,7 @@ import {
 import { crossAlert } from '@/services/crossAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import api from '@/services/api';
 import { getUniqueMuscles, getExercisesByMuscle, ExerciseType, LOCAL_EXERCISES } from '@/constants/exercisesData';
@@ -28,12 +28,26 @@ interface LocalExercise {
   sets_details: SetDetail[];
 }
 
+// Builds the initial scheduled date from an optional 'YYYY-MM-DD' route param
+// (the day the user selected in the trainings calendar). We construct the Date
+// with local Y/M/D parts + the current time to avoid the UTC shift that
+// `new Date('YYYY-MM-DD')` (parsed as UTC midnight) would introduce.
+const buildInitialDate = (dateParam?: string): Date => {
+  if (typeof dateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+    const [y, m, d] = dateParam.split('-').map(Number);
+    const now = new Date();
+    return new Date(y, m - 1, d, now.getHours(), now.getMinutes());
+  }
+  return new Date();
+};
+
 const CreateSessionScreen = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
 
   const [sessionName, setSessionName] = useState('');
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(() => buildInitialDate(dateParam));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [loadingSave, setLoadingSave] = useState(false);
